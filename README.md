@@ -4,6 +4,8 @@ Tusmo est un petit jeu de mots en SwiftUI, dans l'esprit de Motus.
 
 Un premier joueur choisit un mot secret. Le second tente de le retrouver en six essais. Après chaque proposition, les lettres changent de couleur : rouge quand la lettre est au bon endroit, jaune quand elle existe ailleurs dans le mot, sombre quand elle n'est pas présente.
 
+J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en p5.js.
+
 ## Aperçu
 
 <p>
