@@ -35,6 +35,84 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
+    /// Poids de familiarité propre aux Pokémon de cette génération.
+    /// L'ordre de la banque va du plus connu au plus spécifique, avec des
+    /// corrections pour les mascottes et les Pokémon emblématiques.
+    var poidsParMot: [String: Int] {
+        MoteurDifficulte.poidsParOrdreDeNotoriete(
+            mots,
+            surcharges: surchargesNotoriete
+        )
+    }
+
+    func poidsDuMot(_ mot: String) -> Int {
+        poidsParMot[mot.uppercased()] ?? 50
+    }
+
+    func niveauDuMot(_ mot: String) -> NiveauJeu {
+        NiveauJeu.depuisPoids(poidsDuMot(mot))
+    }
+
+    var repartitionDifficulte: [NiveauJeu: Int] {
+        mots.reduce(into: [:]) { resultats, mot in
+            let niveau = niveauDuMot(mot)
+            resultats[niveau, default: 0] += 1
+        }
+    }
+
+    private var surchargesNotoriete: [String: Int] {
+        switch self {
+        case .une:
+            return [
+                "PIKACHU": 100, "DRACAUFEU": 98, "MEWTWO": 96,
+                "TORTANK": 94, "SALAMECHE": 94, "CARAPUCE": 94,
+                "EVOLI": 93, "RAICHU": 88, "LEVIATOR": 88
+            ]
+        case .deux:
+            return [
+                "LUGIA": 100, "NOCTALI": 94, "MENTALI": 94,
+                "TYRANOCIF": 93, "CELEBI": 92, "SUICUNE": 90,
+                "RAIKOU": 89, "ENTEI": 89, "AZUMARILL": 86
+            ]
+        case .trois:
+            return [
+                "GARDEVOIR": 96, "KYOGRE": 100, "GROUDON": 99,
+                "RAYQUAZA": 100, "ABSOL": 92, "LAGGRON": 91,
+                "BRASEGALI": 90
+            ]
+        case .quatre:
+            return [
+                "LUCARIO": 100, "ARCEUS": 99, "GIRATINA": 98,
+                "DARKRAI": 96, "SHAYMIN": 93, "ROSERADE": 87
+            ]
+        case .cinq:
+            return [
+                "ZORUA": 96, "ZOROARK": 96, "RESHIRAM": 99,
+                "ZEKROM": 99, "KYUREM": 96, "VICTINI": 93
+            ]
+        case .six:
+            return [
+                "GRENOUSSE": 96, "NYMPHALI": 97, "XERNEAS": 99,
+                "YVELTAL": 98, "ZYGARDE": 95
+            ]
+        case .sept:
+            return [
+                "MIMIQUI": 100, "LUNALA": 98, "SOLGALEO": 98,
+                "MELTAN": 96, "MELMETAL": 96, "LOUGAROC": 89
+            ]
+        case .huit:
+            return [
+                "ZACIAN": 100, "ZAMAZENTA": 99, "ETERNATOS": 97,
+                "CALYREX": 93, "SHIFOURS": 90, "DURALUGON": 89
+            ]
+        case .neuf:
+            return [
+                "MIRAIDON": 100, "KORAIDON": 100, "PALAFIN": 95,
+                "OGERPON": 95, "TERAPAGOS": 94, "TINKATON": 93
+            ]
+        }
+    }
+
     var region: String {
         switch self {
         case .une: return "Kanto"
@@ -155,24 +233,18 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         guard !disponibles.isEmpty else { return nil }
 
         let compatibles = disponibles.filter {
-            niveau.longueurs.contains($0.count)
+            niveauDuMot($0) == niveau
         }
         if let mot = compatibles.randomElement() {
             return mot
         }
 
         let distanceMinimum = disponibles
-            .map { distance($0.count, de: niveau.longueurs) }
+            .map { abs(niveauDuMot($0).rawValue - niveau.rawValue) }
             .min() ?? 0
         let choix = disponibles.filter {
-            distance($0.count, de: niveau.longueurs) == distanceMinimum
+            abs(niveauDuMot($0).rawValue - niveau.rawValue) == distanceMinimum
         }
         return choix.randomElement()
-    }
-
-    private func distance(_ longueur: Int, de plage: ClosedRange<Int>) -> Int {
-        if longueur < plage.lowerBound { return plage.lowerBound - longueur }
-        if longueur > plage.upperBound { return longueur - plage.upperBound }
-        return 0
     }
 }

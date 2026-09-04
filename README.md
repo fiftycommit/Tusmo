@@ -30,7 +30,11 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
 - rejouer directement après une victoire ou une défaite.
 - jouer avec les personnages des Simpsons ou de South Park ;
 - retrouver des produits et services Apple, des pays ou des objets de la maison ;
-- profiter d'au moins 70 mots uniques dans chaque thème classique ;
+- profiter d'au moins 70 mots uniques dans les thèmes généralistes ;
+- jouer avec une banque Apple volontairement limitée à 50 termes réellement
+  liés à la marque ;
+- classer les termes par familiarité, du niveau Débutant aux références de
+  niveau Maître, indépendamment du nombre de lettres ;
 - voir une progression de 0 à 100 % par thème et retrouver uniquement des mots
   qui n'ont pas encore été devinés ;
 - progresser automatiquement du niveau Débutant au niveau Maître ;
@@ -69,7 +73,9 @@ de jeu, le modèle de profil, la progression par thème et la sauvegarde locale
 des profils.
 
 `Tusmo/Mots.swift` contient les thèmes et le tirage d'un mot adapté au niveau
-du profil actif.
+du profil actif. Chaque banque est ordonnée du terme le plus connu au plus
+spécifique et chaque terme reçoit un poids de notoriété indépendant de sa
+longueur.
 
 `Tusmo/Pokemon.swift` contient les banques de Pokémon des générations I à IX
 et leur tirage par niveau.

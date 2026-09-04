@@ -434,7 +434,7 @@ struct ChoixModeView: View {
                         Text("Difficulté automatique · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.white)
-                        Text(gestionnaireProfils.profilActif.niveau.description)
+                        Text("Notoriété du terme, pas sa longueur · \(gestionnaireProfils.profilActif.niveau.description)")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -664,7 +664,7 @@ struct ChoixGenerationPokemonView: View {
                         Text("Pokémon · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.white)
-                        Text("Les mots sont tirés uniquement de la génération choisie.")
+                        Text("Génération choisie · difficulté selon la notoriété")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -1177,6 +1177,8 @@ struct JeuView: View {
                                 .fill(Color.yellow.opacity(0.85))
                         )
                 }
+            } else if mode == .progression {
+                contenuProgressionVictoire(essais: essais)
             } else {
                 Text("🎉")
                     .font(.system(size: 60))
@@ -1193,6 +1195,89 @@ struct JeuView: View {
                 boutonRejouer
             }
         }
+    }
+
+    private func contenuProgressionVictoire(essais: Int) -> some View {
+        let profil = gestionnaireProfils.profilActif
+
+        return VStack(spacing: 14) {
+            Text("📈")
+                .font(.system(size: 50))
+            Text("Progression")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            Text("Mot trouvé en \(essais) essai\(essais > 1 ? "s" : "")")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.65))
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("\(profil.niveau.emoji) Niveau \(profil.niveau.rawValue) · \(profil.niveau.nom)")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Text(profil.experienceAffichee)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                ProgressView(value: profil.progressionNiveau)
+                    .tint(.red)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(0.06))
+            )
+
+            if let titre = sourceProgressionTitre,
+               let progression = sourceProgression {
+                blocProgressionTheme(
+                    titre: titre,
+                    progression: progression,
+                    total: sourceProgressionTotal
+                )
+            }
+
+            Text("Score : \(dernierScore)")
+                .font(.headline)
+                .foregroundColor(.yellow)
+
+            if sourceProgressionComplete {
+                boutonMenu
+            } else {
+                boutonRejouer
+            }
+        }
+    }
+
+    private func blocProgressionTheme(
+        titre: String,
+        progression: Double,
+        total: Int
+    ) -> some View {
+        let trouves = Int((Double(total) * progression).rounded())
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(titre)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(trouves)/\(total)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+            ProgressView(value: progression)
+                .tint(.green)
+            Text("\(pourcentage(progression)) % du thème découvert")
+                .font(.caption)
+                .foregroundColor(progression >= 1 ? .green : .white.opacity(0.6))
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.green.opacity(0.08))
+        )
     }
 
     @ViewBuilder
@@ -1343,6 +1428,43 @@ struct JeuView: View {
             return theme.cleProgression
         }
         return nil
+    }
+
+    private var sourceProgressionTitre: String? {
+        if let generationPokemon {
+            return "Pokémon · \(generationPokemon.titre)"
+        }
+        return theme?.nom
+    }
+
+    private var sourceProgression: Double? {
+        if let generationPokemon {
+            return gestionnaireProfils.progressionGeneration(generationPokemon)
+        }
+        if let theme {
+            return gestionnaireProfils.progressionTheme(theme)
+        }
+        return nil
+    }
+
+    private var sourceProgressionTotal: Int {
+        if let generationPokemon {
+            return Set(generationPokemon.mots).count
+        }
+        if let theme {
+            return theme.estPokemon ? GenerationPokemon.totalMots : Set(theme.mots).count
+        }
+        return 0
+    }
+
+    private var sourceProgressionComplete: Bool {
+        if let generationPokemon {
+            return gestionnaireProfils.estGenerationComplete(generationPokemon)
+        }
+        if let theme {
+            return gestionnaireProfils.estThemeComplet(theme)
+        }
+        return false
     }
 
     private var nbLettres: Int { motSecret.count }
@@ -1648,7 +1770,7 @@ struct JeuView: View {
 
     private var libelleRejouer: String {
         switch mode {
-        case .progression: return "Nouveau mot"
+        case .progression: return "Mot suivant"
         case .tournoi: return "Rejouer le tournoi"
         case .survie: return "Nouvelle tentative"
         case .duo: return "Rejouer"

@@ -8,7 +8,7 @@
 import Foundation
 import Combine
 
-enum NiveauJeu: Int, CaseIterable, Codable, Identifiable {
+enum NiveauJeu: Int, CaseIterable, Codable, Hashable, Identifiable {
     case debutant = 1
     case apprenti = 2
     case confirme = 3
@@ -39,22 +39,25 @@ enum NiveauJeu: Int, CaseIterable, Codable, Identifiable {
 
     var description: String {
         switch self {
-        case .debutant: return "Des mots courts pour découvrir le jeu"
-        case .apprenti: return "Un peu plus de lettres, le rythme s'accélère"
-        case .confirme: return "Les mots deviennent plus longs"
-        case .expert: return "Il faut rester concentré"
-        case .maitre: return "Le défi ultime"
+        case .debutant: return "Des termes très connus pour commencer"
+        case .apprenti: return "Des termes courants, avec quelques pièges"
+        case .confirme: return "La connaissance du thème devient importante"
+        case .expert: return "Des termes plus spécifiques à retrouver"
+        case .maitre: return "Les références les plus pointues du thème"
         }
     }
 
-    /// Les mots disponibles dans la banque sont compris entre 5 et 9 lettres.
-    var longueurs: ClosedRange<Int> {
-        switch self {
-        case .debutant: return 5...5
-        case .apprenti: return 5...6
-        case .confirme: return 6...7
-        case .expert: return 7...8
-        case .maitre: return 8...9
+    /// Convertit un poids de notoriété en niveau de jeu.
+    ///
+    /// 100 représente un terme immédiatement identifiable, tandis que 1
+    /// représente un terme très spécialisé. La longueur n'intervient pas.
+    static func depuisPoids(_ poids: Int) -> NiveauJeu {
+        switch min(max(poids, 1), 100) {
+        case 80...100: return .debutant
+        case 60..<80: return .apprenti
+        case 40..<60: return .confirme
+        case 20..<40: return .expert
+        default: return .maitre
         }
     }
 
@@ -63,7 +66,7 @@ enum NiveauJeu: Int, CaseIterable, Codable, Identifiable {
         rawValue >= NiveauJeu.expert.rawValue ? 5 : 6
     }
 
-    /// Les mots longs rapportent davantage dans les modes à score.
+    /// Les termes plus spécifiques rapportent davantage dans les modes à score.
     var multiplicateurScore: Double {
         1.0 + Double(rawValue - 1) * 0.15
     }
@@ -75,6 +78,35 @@ enum NiveauJeu: Int, CaseIterable, Codable, Identifiable {
 
     var estMaximum: Bool {
         self == .maitre
+    }
+}
+
+/// Construit les poids de notoriété à partir de l'ordre éditorial d'une
+/// banque. Chaque banque est organisée du terme le plus connu au plus
+/// spécifique. Les surcharges permettent de remonter les références
+/// emblématiques qui seraient naturellement placées plus loin dans une liste.
+enum MoteurDifficulte {
+    static func poidsParOrdreDeNotoriete(
+        _ mots: [String],
+        surcharges: [String: Int] = [:]
+    ) -> [String: Int] {
+        var uniques: [String] = []
+        var dejaAjoutes = Set<String>()
+
+        for mot in mots {
+            let normalise = mot.uppercased()
+            guard dejaAjoutes.insert(normalise).inserted else { continue }
+            uniques.append(normalise)
+        }
+
+        guard !uniques.isEmpty else { return [:] }
+
+        let denominateur = max(uniques.count - 1, 1)
+        return Dictionary(uniqueKeysWithValues: uniques.enumerated().map { index, mot in
+            let poidsEditorial = 100 - Int((Double(index) / Double(denominateur) * 99).rounded())
+            let poids = surcharges[mot] ?? poidsEditorial
+            return (mot, min(max(poids, 1), 100))
+        })
     }
 }
 
