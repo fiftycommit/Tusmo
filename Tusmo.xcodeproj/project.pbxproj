@@ -9,6 +9,9 @@
 /* Begin PBXBuildFile section */
 		484E781C29B62306005B4D69 /* TusmoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484E781B29B62306005B4D69 /* TusmoApp.swift */; };
 		484E781E29B62306005B4D69 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484E781D29B62306005B4D69 /* ContentView.swift */; };
+		484E78AB29B62306005B4D69 /* Mots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484E78AA29B62306005B4D69 /* Mots.swift */; };
+		484E78AD29B62306005B4D69 /* Progression.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484E78AC29B62306005B4D69 /* Progression.swift */; };
+		484E78AF29B62306005B4D69 /* Pokemon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 484E78AE29B62306005B4D69 /* Pokemon.swift */; };
 		484E782029B62309005B4D69 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 484E781F29B62309005B4D69 /* Assets.xcassets */; };
 		484E782329B62309005B4D69 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 484E782229B62309005B4D69 /* Preview Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -17,6 +20,9 @@
 		484E781829B62306005B4D69 /* Tusmo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tusmo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		484E781B29B62306005B4D69 /* TusmoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TusmoApp.swift; sourceTree = "<group>"; };
 		484E781D29B62306005B4D69 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		484E78AA29B62306005B4D69 /* Mots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mots.swift; sourceTree = "<group>"; };
+		484E78AC29B62306005B4D69 /* Progression.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Progression.swift; sourceTree = "<group>"; };
+		484E78AE29B62306005B4D69 /* Pokemon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Pokemon.swift; sourceTree = "<group>"; };
 		484E781F29B62309005B4D69 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		484E782229B62309005B4D69 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -53,6 +59,9 @@
 			children = (
 				484E781B29B62306005B4D69 /* TusmoApp.swift */,
 				484E781D29B62306005B4D69 /* ContentView.swift */,
+				484E78AA29B62306005B4D69 /* Mots.swift */,
+				484E78AC29B62306005B4D69 /* Progression.swift */,
+				484E78AE29B62306005B4D69 /* Pokemon.swift */,
 				484E781F29B62309005B4D69 /* Assets.xcassets */,
 				484E782129B62309005B4D69 /* Preview Content */,
 			);
@@ -138,6 +147,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				484E781E29B62306005B4D69 /* ContentView.swift in Sources */,
+				484E78AB29B62306005B4D69 /* Mots.swift in Sources */,
+				484E78AD29B62306005B4D69 /* Progression.swift in Sources */,
+				484E78AF29B62306005B4D69 /* Pokemon.swift in Sources */,
 				484E781C29B62306005B4D69 /* TusmoApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

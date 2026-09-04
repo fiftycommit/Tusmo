@@ -6,10 +6,11 @@
 //
 
 import SwiftUI
+import Foundation
 
 // MARK: - Modèles
 
-enum EtatLettre {
+enum EtatLettre: Equatable {
     case bonnePlace
     case mauvaisePlace
     case absent
@@ -32,15 +33,21 @@ struct LettreTuile: Identifiable {
         switch etat {
         case .bonnePlace: return Color(red: 0.85, green: 0.15, blue: 0.15)
         case .mauvaisePlace: return Color(red: 0.9, green: 0.7, blue: 0.1)
-        case .absent: return Color.white.opacity(0.12)
+        case .absent: return .black
         }
     }
 
     var texteCouleur: Color {
         switch etat {
-        case .bonnePlace, .absent: return .white
+        case .bonnePlace: return .white
         case .mauvaisePlace: return .black
+        case .absent: return Color.white.opacity(0.45)
         }
+    }
+
+    /// Contour discret pour que les cases noires restent lisibles sur le fond sombre.
+    var bordureCouleur: Color {
+        etat == .absent ? Color.white.opacity(0.15) : .clear
     }
 }
 
@@ -48,54 +55,650 @@ enum EtatJeu {
     case enCours
     case gagne(essais: Int)
     case perdu(mot: String)
+    case survieEncaissee(score: Int)
+    case surviePerdue(mot: String, score: Int)
+    case tournoiTermine(score: Int, gagne: Bool)
 }
 
 // MARK: - Écran principal (Navigation)
 
 struct ContentView: View {
+    @StateObject private var gestionnaireProfils = GestionnaireProfils()
+
     var body: some View {
         NavigationStack {
             MenuView()
         }
+        .environmentObject(gestionnaireProfils)
     }
 }
 
-// MARK: - Menu
+// MARK: - Fond commun
+
+private let fondJeu = Color(red: 0.06, green: 0.06, blue: 0.1)
+
+// MARK: - Menu (choix du mode)
 
 struct MenuView: View {
-    @State private var mot = ""
-    @State private var motValide = false
-    @State private var naviguer = false
-    @State private var motVisible = false
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
 
     var body: some View {
         ZStack {
-            Color(red: 0.06, green: 0.06, blue: 0.1)
-                .ignoresSafeArea()
+            fondJeu.ignoresSafeArea()
 
             VStack(spacing: 32) {
                 Spacer()
 
-                // Logo
-                VStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        ForEach(Array("TUSMO".enumerated()), id: \.offset) { i, c in
-                            Text(String(c))
-                                .font(.system(size: 36, weight: .black, design: .rounded))
+                LogoTusmo()
+
+                NavigationLink {
+                    ProfilsView()
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(gestionnaireProfils.profilActif.niveau.emoji)
+                            .font(.title2)
+                            .frame(width: 42, height: 42)
+                            .background(
+                                Circle()
+                                    .fill(Color.yellow.opacity(0.15))
+                            )
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(gestionnaireProfils.profilActif.nom)
+                                .font(.headline)
                                 .foregroundColor(.white)
-                                .frame(width: 52, height: 52)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .fill([Color.red, .yellow, .red, .yellow, .red][i])
-                                )
+                            Text("Niveau \(gestionnaireProfils.profilActif.niveau.rawValue) · \(gestionnaireProfils.profilActif.niveau.nom)")
+                                .font(.caption)
+                                .foregroundColor(.white.opacity(0.55))
                         }
+
+                        Spacer()
+
+                        Image(systemName: "person.crop.circle.badge.plus")
+                            .foregroundColor(.white.opacity(0.45))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.06))
+                    )
+                }
+                .padding(.horizontal, 28)
+
+                Spacer()
+
+                VStack(spacing: 14) {
+                    NavigationLink {
+                        ChoixModeView()
+                    } label: {
+                        carteMode(
+                            titre: "Solo",
+                            sousTitre: "Progression, tournoi ou survie",
+                            icone: "person.fill",
+                            couleur: .red
+                        )
                     }
 
-                    Text("Le jeu de mots")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.4))
-                        .padding(.top, 4)
+                    NavigationLink {
+                        DuoView()
+                    } label: {
+                        carteMode(
+                            titre: "2 joueurs",
+                            sousTitre: "Un joueur écrit le mot, l'autre devine",
+                            icone: "person.2.fill",
+                            couleur: .yellow
+                        )
+                    }
                 }
+                .padding(.horizontal, 28)
+
+                Spacer()
+
+                ReglesRapides()
+            }
+        }
+        .navigationBarHidden(true)
+    }
+
+    private func carteMode(titre: String, sousTitre: String, icone: String, couleur: Color) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icone)
+                .font(.title2)
+                .foregroundColor(couleur)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(couleur.opacity(0.15))
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(titre)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Text(sousTitre)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .foregroundColor(.white.opacity(0.3))
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+}
+
+// MARK: - Éléments partagés
+
+struct LogoTusmo: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(Array("TUSMO".enumerated()), id: \.offset) { i, c in
+                    Text(String(c))
+                        .font(.system(size: 36, weight: .black, design: .rounded))
+                        .foregroundColor(.white)
+                        .frame(width: 52, height: 52)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill([Color.red, .yellow, .red, .yellow, .red][i])
+                        )
+                }
+            }
+
+            Text("Le jeu de mots")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.4))
+                .padding(.top, 4)
+        }
+    }
+}
+
+struct ReglesRapides: View {
+    var body: some View {
+        VStack(spacing: 6) {
+            Text("🔴 Bonne lettre, bon endroit")
+            Text("🟡 Bonne lettre, mauvais endroit")
+            Text("⚫ Lettre absente")
+        }
+        .font(.caption)
+        .foregroundColor(.white.opacity(0.6))
+        .padding(.bottom, 30)
+    }
+}
+
+struct EnteteSecondaire: View {
+    let titre: String
+    let actionRetour: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(action: actionRetour) {
+                Image(systemName: "chevron.left")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.6))
+            }
+
+            Spacer()
+
+            Text(titre)
+                .font(.headline)
+                .foregroundColor(.white)
+
+            Spacer()
+
+            Image(systemName: "chevron.left")
+                .opacity(0)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+    }
+}
+
+private func couleurMode(_ mode: ModeJeu) -> Color {
+    switch mode {
+    case .progression: return .red
+    case .tournoi: return .yellow
+    case .survie: return .orange
+    case .duo: return .yellow
+    }
+}
+
+// MARK: - Profils de sauvegarde
+
+struct ProfilsView: View {
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+    @Environment(\.dismiss) private var dismiss
+    @State private var nouveauNom = ""
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                EnteteSecondaire(titre: "Profils", actionRetour: { dismiss() })
+
+                ScrollView {
+                    VStack(spacing: 14) {
+                        ForEach(gestionnaireProfils.profils) { profil in
+                            HStack(spacing: 14) {
+                                Button {
+                                    gestionnaireProfils.selectionnerProfil(profil.id)
+                                } label: {
+                                    HStack(spacing: 14) {
+                                        Image(systemName: profil.id == gestionnaireProfils.profilActifID ? "checkmark.circle.fill" : "circle")
+                                            .foregroundColor(profil.id == gestionnaireProfils.profilActifID ? .red : .white.opacity(0.25))
+                                            .font(.title3)
+
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text(profil.nom)
+                                                .font(.headline)
+                                                .foregroundColor(.white)
+                                            Text("\(profil.niveau.emoji) Niveau \(profil.niveau.rawValue) · \(profil.victoires) victoire\(profil.victoires > 1 ? "s" : "")")
+                                                .font(.caption)
+                                                .foregroundColor(.white.opacity(0.55))
+                                        }
+
+                                        Spacer()
+                                    }
+                                }
+                                .buttonStyle(.plain)
+
+                                if gestionnaireProfils.profils.count > 1 {
+                                    Button(role: .destructive) {
+                                        gestionnaireProfils.supprimerProfil(profil.id)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.white.opacity(0.35))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                        }
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Nouveau profil")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white.opacity(0.7))
+
+                            HStack(spacing: 10) {
+                                TextField("Prénom ou pseudo", text: $nouveauNom)
+                                    .padding(14)
+                                    .background(Color.white)
+                                    .cornerRadius(12)
+                                    .environment(\.colorScheme, .light)
+
+                                Button {
+                                    if gestionnaireProfils.creerProfil(nom: nouveauNom) != nil {
+                                        nouveauNom = ""
+                                    }
+                                } label: {
+                                    Image(systemName: "plus")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .frame(width: 48, height: 48)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(nouveauNom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color.red.opacity(0.3) : Color.red)
+                                        )
+                                }
+                                .disabled(nouveauNom.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                        .padding(.top, 8)
+
+                        profilDetail(gestionnaireProfils.profilActif)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+
+    private func profilDetail(_ profil: ProfilSauvegarde) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Progression")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Spacer()
+                Text(profil.experienceAffichee)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.yellow)
+            }
+
+            ProgressView(value: profil.progressionNiveau)
+                .tint(.red)
+
+            HStack(spacing: 0) {
+                statistique("Parties", valeur: profil.partiesJouees)
+                statistique("Victoires", valeur: profil.victoires)
+                statistique("Record survie", valeur: profil.meilleurScoreSurvie)
+            }
+        }
+        .padding(18)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    private func statistique(_ titre: String, valeur: Int) -> some View {
+        VStack(spacing: 4) {
+            Text("\(valeur)")
+                .font(.headline)
+                .foregroundColor(.white)
+            Text(titre)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Solo : choix du mode
+
+struct ChoixModeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                EnteteSecondaire(titre: "Mode solo", actionRetour: { dismiss() })
+
+                HStack(spacing: 10) {
+                    Text(gestionnaireProfils.profilActif.niveau.emoji)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Difficulté automatique · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text(gestionnaireProfils.profilActif.niveau.description)
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.red.opacity(0.12))
+                )
+                .padding(.horizontal, 20)
+
+                ScrollView {
+                    VStack(spacing: 14) {
+                        ForEach(ModeJeu.modesSolo) { mode in
+                            NavigationLink {
+                                ChoixThemeView(mode: mode)
+                            } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: mode.icone)
+                                        .font(.title2)
+                                        .foregroundColor(couleurMode(mode))
+                                        .frame(width: 46, height: 46)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 13)
+                                                .fill(couleurMode(mode).opacity(0.15))
+                                        )
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(mode.titre)
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                        Text(mode.sousTitre)
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.52))
+                                            .multilineTextAlignment(.leading)
+                                    }
+
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.white.opacity(0.3))
+                                }
+                                .padding(18)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
+// MARK: - Solo : choix du thème
+
+struct ChoixThemeView: View {
+    let mode: ModeJeu
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+
+    private let colonnes = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+
+    init(mode: ModeJeu = .progression) {
+        self.mode = mode
+    }
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    Spacer()
+                    Text("Choisis un thème")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Spacer()
+                    Image(systemName: "chevron.left").opacity(0)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                ScrollView {
+                    LazyVGrid(columns: colonnes, spacing: 12) {
+                        ForEach(BanqueDeMots.tous) { theme in
+                            NavigationLink {
+                                destinationPourTheme(theme)
+                            } label: {
+                                carteTheme(theme)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+
+    @ViewBuilder
+    private func destinationPourTheme(_ theme: Theme) -> some View {
+        if theme.estPokemon {
+            ChoixGenerationPokemonView(theme: theme, mode: mode)
+        } else {
+            let niveau = gestionnaireProfils.profilActif.niveau
+            JeuView(
+                motSecret: theme.motAleatoire(niveau: niveau),
+                theme: theme,
+                mode: mode,
+                niveau: niveau
+            )
+        }
+    }
+
+    private func carteTheme(_ theme: Theme) -> some View {
+        VStack(spacing: 8) {
+            Text(theme.emoji)
+                .font(.system(size: 32))
+            Text(theme.nom)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.white)
+            Text(theme.estPokemon ? "9 générations" : "\(theme.mots.count) mots")
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.4))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+}
+
+// MARK: - Pokémon : choix de la génération
+
+struct ChoixGenerationPokemonView: View {
+    let theme: Theme
+    let mode: ModeJeu
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                EnteteSecondaire(titre: "Choisis une génération", actionRetour: { dismiss() })
+
+                HStack(spacing: 10) {
+                    Text("⚡️")
+                        .font(.title2)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pokémon · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("Les mots sont tirés uniquement de la génération choisie.")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.yellow.opacity(0.12))
+                )
+                .padding(.horizontal, 20)
+
+                ScrollView {
+                    VStack(spacing: 12) {
+                        ForEach(GenerationPokemon.allCases) { generation in
+                            NavigationLink {
+                                jeuPourGeneration(generation)
+                            } label: {
+                                HStack(spacing: 14) {
+                                    Text("G\(generation.rawValue)")
+                                        .font(.headline.monospaced())
+                                        .foregroundColor(.black)
+                                        .frame(width: 52, height: 52)
+                                        .background(
+                                            Circle()
+                                                .fill(Color.yellow)
+                                        )
+
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(generation.titre)
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                        Text("\(generation.region) · \(generation.mots.count) Pokémon")
+                                            .font(.caption)
+                                            .foregroundColor(.white.opacity(0.5))
+                                    }
+
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.white.opacity(0.3))
+                                }
+                                .padding(14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+
+    private func jeuPourGeneration(_ generation: GenerationPokemon) -> some View {
+        let niveau = gestionnaireProfils.profilActif.niveau
+        return JeuView(
+            motSecret: generation.motAleatoire(niveau: niveau),
+            theme: theme,
+            generationPokemon: generation,
+            mode: mode,
+            niveau: niveau
+        )
+    }
+}
+
+// MARK: - 2 joueurs : saisie du mot secret
+
+struct DuoView: View {
+    @State private var mot = ""
+    @State private var motValide = false
+    @State private var naviguer = false
+    @State private var motVisible = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+
+                Spacer()
+
+                LogoTusmo()
 
                 Spacer()
 
@@ -136,7 +739,7 @@ struct MenuView: View {
                         if mot.count > 9 {
                             mot = String(mot.prefix(9))
                         }
-                        motValide = !mot.isEmpty && mot.allSatisfy(\.isLetter)
+                        motValide = mot.count >= 3 && mot.allSatisfy(\.isLetter)
                     }
                 }
                 .padding(.horizontal, 28)
@@ -163,15 +766,7 @@ struct MenuView: View {
 
                 Spacer()
 
-                // Règles rapides
-                VStack(spacing: 6) {
-                    Text("🔴 Bonne lettre, bon endroit")
-                    Text("🟡 Bonne lettre, mauvais endroit")
-                    Text("⚫ Lettre absente")
-                }
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.6))
-                .padding(.bottom, 30)
+                ReglesRapides()
             }
         }
         .navigationBarHidden(true)
@@ -189,21 +784,47 @@ struct MenuView: View {
 // MARK: - Écran de jeu
 
 struct JeuView: View {
-    let motSecret: String
+    /// Thème du mode solo ; `nil` en mode 2 joueurs.
+    let theme: Theme?
+    let generationPokemon: GenerationPokemon?
+    let mode: ModeJeu
+    let niveauInitial: NiveauJeu
 
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+    @State private var motSecret: String
+    @State private var niveauActuel: NiveauJeu
     @State private var proposition = ""
     @State private var historique: [[LettreTuile]] = []
     @State private var essai = 0
     @State private var etat: EtatJeu = .enCours
     @State private var tuileSelectionnee: EtatLettre?
+    @State private var scoreTournoi = 0
+    @State private var mancheTournoi = 1
+    @State private var scoreSurvie = 0
+    @State private var multiplicateurSurvie = 1.0
+    @State private var dernierScore = 0
     @Environment(\.dismiss) private var dismiss
 
-    private let maxEssais = 6
+    private let nombreManchesTournoi = 5
+
+    init(
+        motSecret: String,
+        theme: Theme? = nil,
+        generationPokemon: GenerationPokemon? = nil,
+        mode: ModeJeu = .duo,
+        niveau: NiveauJeu = .debutant
+    ) {
+        _motSecret = State(initialValue: motSecret.uppercased())
+        _niveauActuel = State(initialValue: niveau)
+        self.theme = theme
+        self.generationPokemon = generationPokemon
+        self.mode = mode
+        self.niveauInitial = niveau
+    }
 
     var body: some View {
         ZStack {
-            Color(red: 0.06, green: 0.06, blue: 0.1)
-                .ignoresSafeArea()
+            fondJeu.ignoresSafeArea()
 
             VStack(spacing: 16) {
                 // Header
@@ -214,58 +835,54 @@ struct JeuView: View {
                             .foregroundColor(.white.opacity(0.6))
                     }
                     Spacer()
-                    Text("\(motSecret.count) lettres")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.white.opacity(0.5))
+                    VStack(spacing: 2) {
+                        if mode != .duo {
+                            Text("\(mode == .tournoi ? "🏆" : mode == .survie ? "🔥" : "📈") \(mode.titre)")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
+                        Text(sourceTitre)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.6))
+                        Text("\(nbLettres) lettres · niveau \(niveauActuel.rawValue)")
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.5))
+                    }
                     Spacer()
-                    // Essais restants
-                    HStack(spacing: 4) {
-                        ForEach(0..<maxEssais, id: \.self) { i in
-                            Circle()
-                                .fill(i < (maxEssais - essai) ? Color.red : Color.white.opacity(0.12))
-                                .frame(width: 10, height: 10)
+                    VStack(alignment: .trailing, spacing: 4) {
+                        HStack(spacing: 4) {
+                            ForEach(0..<maxEssais, id: \.self) { i in
+                                Circle()
+                                    .fill(i < (maxEssais - essai) ? Color.red : Color.white.opacity(0.12))
+                                    .frame(width: 8, height: 8)
+                            }
+                        }
+
+                        if mode == .tournoi {
+                            Text("Manche \(mancheTournoi)/\(nombreManchesTournoi)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.yellow)
+                        } else if mode == .survie {
+                            Text("×\(String(format: "%.1f", multiplicateurSurvie)) · \(scoreSurvie) pts")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.orange)
                         }
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
 
-                // Grille des essais
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(spacing: 8) {
-                            // Historique
-                            ForEach(historique.indices, id: \.self) { row in
-                                HStack(spacing: 5) {
-                                    ForEach(historique[row]) { tuile in
-                                        Text(tuile.lettre)
-                                            .font(.system(size: tilleFont, weight: .bold, design: .monospaced))
-                                            .foregroundColor(tuile.texteCouleur)
-                                            .frame(width: tilleSize, height: tilleSize)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .fill(tuile.couleur)
-                                            )
-                                            .onTapGesture {
-                                                withAnimation(.easeInOut(duration: 0.15)) {
-                                                    tuileSelectionnee = tuileSelectionnee == tuile.etat ? nil : tuile.etat
-                                                }
-                                            }
-                                    }
-                                }
-                                .id(row)
-                            }
-                        }
-                        .padding(.vertical, 8)
-                    }
-                    .onChange(of: historique.count) { _ in
-                        if let last = historique.indices.last {
-                            withAnimation {
-                                proxy.scrollTo(last, anchor: .bottom)
+                // Grille complète (comme au vrai Motus)
+                VStack(spacing: 6) {
+                    ForEach(0..<maxEssais, id: \.self) { ligne in
+                        HStack(spacing: 5) {
+                            ForEach(0..<nbLettres, id: \.self) { colonne in
+                                caseGrille(ligne: ligne, colonne: colonne)
                             }
                         }
                     }
                 }
+                .padding(.vertical, 8)
 
                 // Bulle d'info
                 if let etatTuile = tuileSelectionnee {
@@ -287,6 +904,7 @@ struct JeuView: View {
                 if case .enCours = etat {
                     VStack(spacing: 12) {
                         TextField("Devine le mot", text: $proposition)
+                            .onChange(of: proposition) { _ in normaliserProposition() }
                             .padding(16)
                             .background(Color.white)
                             .cornerRadius(14)
@@ -296,8 +914,8 @@ struct JeuView: View {
                             .textInputAutocapitalization(.characters)
                             .onSubmit { proposer() }
 
-                        if !proposition.isEmpty && proposition.count != motSecret.count {
-                            Text("Il faut \(motSecret.count) lettres (tu en as \(proposition.count))")
+                        if proposition.count > 1 && proposition.count != nbLettres {
+                            Text("Il faut \(nbLettres) lettres (tu en as \(proposition.count))")
                                 .font(.caption)
                                 .foregroundColor(.orange)
                         }
@@ -322,58 +940,36 @@ struct JeuView: View {
                 }
             }
 
-            // Overlay victoire / défaite
-            if case .gagne(let nbEssais) = etat {
+            // Overlay victoire / défaite / choix de risque
+            switch etat {
+            case .enCours:
+                EmptyView()
+            case .gagne(let nbEssais):
                 overlayResultat {
-                    VStack(spacing: 16) {
-                        Text("🎉")
-                            .font(.system(size: 60))
-                        Text("Bravo !")
-                            .font(.system(size: 32, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                        Text("Trouvé en \(nbEssais) essai\(nbEssais > 1 ? "s" : "") !")
-                            .font(.title3)
-                            .foregroundColor(.white.opacity(0.7))
-                        Text("Score : \(max(0, 100 - motSecret.count * nbEssais))")
-                            .font(.headline)
-                            .foregroundColor(.yellow)
-
-                        boutonRejouer
-                    }
+                    contenuVictoire(essais: nbEssais)
                 }
-            }
-
-            if case .perdu(let solution) = etat {
+            case .perdu(let solution):
                 overlayResultat {
-                    VStack(spacing: 16) {
-                        Text("😔")
-                            .font(.system(size: 60))
-                        Text("Perdu...")
-                            .font(.system(size: 32, weight: .black, design: .rounded))
-                            .foregroundColor(.white)
-                        Text("Le mot était :")
-                            .font(.subheadline)
-                            .foregroundColor(.white.opacity(0.5))
-
-                        HStack(spacing: 5) {
-                            ForEach(Array(solution.enumerated()), id: \.offset) { _, c in
-                                Text(String(c))
-                                    .font(.system(size: tilleFont, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.white)
-                                    .frame(width: tilleSize, height: tilleSize)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color.red)
-                                    )
-                            }
-                        }
-
-                        boutonRejouer
-                    }
+                    contenuDefaite(solution: solution)
+                }
+            case .survieEncaissee(let score):
+                overlayResultat {
+                    contenuSurvieEncaissee(score: score)
+                }
+            case .surviePerdue(let solution, let score):
+                overlayResultat {
+                    contenuSurviePerdue(solution: solution, score: score)
+                }
+            case .tournoiTermine(let score, let gagne):
+                overlayResultat {
+                    contenuTournoiTermine(score: score, gagne: gagne)
                 }
             }
         }
         .navigationBarHidden(true)
+        .onAppear {
+            if proposition.isEmpty { proposition = premiereLettre }
+        }
         .onTapGesture {
             if tuileSelectionnee != nil {
                 withAnimation(.easeInOut(duration: 0.15)) {
@@ -384,10 +980,277 @@ struct JeuView: View {
         }
     }
 
+    // MARK: - Résultats et choix de mode
+
+    @ViewBuilder
+    private func contenuVictoire(essais: Int) -> some View {
+        VStack(spacing: 16) {
+            if mode == .survie {
+                Text("🔥")
+                    .font(.system(size: 56))
+                Text("Mot trouvé !")
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                Text("En risque : \(scoreSurvie) points")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(.orange)
+                Text("Tu encaisses maintenant, ou tu tentes le multiplicateur suivant.")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.65))
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    continuerSurvie()
+                } label: {
+                    Label("Continuer · \(multiplicateurSuivantTexte)", systemImage: "flame.fill")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.orange)
+                        )
+                }
+
+                Button {
+                    encaisserSurvie()
+                } label: {
+                    Label("Arrêter et encaisser", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white.opacity(0.8))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .strokeBorder(Color.white.opacity(0.25), lineWidth: 1)
+                        )
+                }
+            } else if mode == .tournoi {
+                Text("🏆")
+                    .font(.system(size: 56))
+                Text("Manche réussie !")
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                Text("+\(dernierScore) points · total \(scoreTournoi)")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(.yellow)
+                Button {
+                    continuerTournoi()
+                } label: {
+                    Label("Manche suivante", systemImage: "arrow.right")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(Color.yellow.opacity(0.85))
+                        )
+                }
+            } else {
+                Text("🎉")
+                    .font(.system(size: 60))
+                Text("Bravo !")
+                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .foregroundColor(.white)
+                Text("Trouvé en \(essais) essai\(essais > 1 ? "s" : "") !")
+                    .font(.title3)
+                    .foregroundColor(.white.opacity(0.7))
+                Text("Score : \(dernierScore)")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+
+                boutonRejouer
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func contenuDefaite(solution: String) -> some View {
+        VStack(spacing: 16) {
+            Text(mode == .tournoi ? "🏁" : "😔")
+                .font(.system(size: 60))
+            Text(mode == .tournoi ? "Tournoi terminé" : "Perdu...")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            if mode == .tournoi {
+                Text("Éliminé à la manche \(mancheTournoi)/\(nombreManchesTournoi)")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.65))
+                Text("Score final : \(scoreTournoi)")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+            } else {
+                Text("Le mot était :")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+
+            motSolution(solution)
+            boutonRejouer
+        }
+    }
+
+    private func contenuSurvieEncaissee(score: Int) -> some View {
+        VStack(spacing: 16) {
+            Text("💰")
+                .font(.system(size: 60))
+            Text("Points encaissés !")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            Text("Tu repars avec \(score) points.")
+                .font(.title3)
+                .foregroundColor(.orange)
+            Text("Record du profil : \(gestionnaireProfils.profilActif.meilleurScoreSurvie) points")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
+            boutonRejouer
+        }
+    }
+
+    private func contenuSurviePerdue(solution: String, score: Int) -> some View {
+        VStack(spacing: 16) {
+            Text("💥")
+                .font(.system(size: 60))
+            Text("Tout est perdu")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            Text("Tu avais \(score) points en jeu.")
+                .font(.title3)
+                .foregroundColor(.orange)
+            Text("Le mot était :")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.5))
+            motSolution(solution)
+            boutonRejouer
+        }
+    }
+
+    private func contenuTournoiTermine(score: Int, gagne: Bool) -> some View {
+        VStack(spacing: 16) {
+            Text(gagne ? "🏆" : "🏁")
+                .font(.system(size: 60))
+            Text(gagne ? "Tournoi gagné !" : "Tournoi terminé")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            Text("Score final : \(score)")
+                .font(.title3.weight(.semibold))
+                .foregroundColor(.yellow)
+            Text("\(nombreManchesTournoi) manches · niveau \(niveauActuel.nom)")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
+            boutonRejouer
+        }
+    }
+
+    private func motSolution(_ solution: String) -> some View {
+        HStack(spacing: 5) {
+            ForEach(Array(solution.enumerated()), id: \.offset) { _, c in
+                Text(String(c))
+                    .font(.system(size: tilleFont, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .frame(width: tilleSize, height: tilleSize)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.red)
+                    )
+            }
+        }
+    }
+
+    // MARK: - Grille
+
+    private var maxEssais: Int {
+        mode == .duo ? 6 : niveauActuel.nombreEssais
+    }
+
+    private var sourceTitre: String {
+        if let generationPokemon {
+            return "⚡️ Pokémon · \(generationPokemon.titre)"
+        }
+        if let theme {
+            return "\(theme.emoji) \(theme.nom)"
+        }
+        return "Mot secret"
+    }
+
+    private var nbLettres: Int { motSecret.count }
+
+    private var multiplicateurSuivantTexte: String {
+        String(format: "×%.1f", multiplicateurSurvie + 0.5)
+    }
+
+    private var premiereLettre: String {
+        String(motSecret.prefix(1))
+    }
+
+    /// Une case de la grille : historique, ligne en cours de saisie, ou case vide.
+    @ViewBuilder
+    private func caseGrille(ligne: Int, colonne: Int) -> some View {
+        if ligne < historique.count {
+            let tuile = historique[ligne][colonne]
+            texteTuile(tuile.lettre, couleur: tuile.couleur, texte: tuile.texteCouleur)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tuile.bordureCouleur, lineWidth: 1)
+                )
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        tuileSelectionnee = tuileSelectionnee == tuile.etat ? nil : tuile.etat
+                    }
+                }
+        } else if ligne == historique.count, case .enCours = etat {
+            let saisie = Array(proposition.uppercased())
+            let lettre = colonne < saisie.count ? String(saisie[colonne]) : ""
+            texteTuile(lettre, couleur: Color.white.opacity(0.06), texte: .white)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(
+                            colonne == min(saisie.count, nbLettres - 1) ? Color.red : Color.white.opacity(0.2),
+                            lineWidth: colonne == min(saisie.count, nbLettres - 1) ? 2 : 1
+                        )
+                )
+        } else {
+            // Lignes à venir : seule la première lettre est donnée
+            texteTuile(colonne == 0 ? premiereLettre : "", couleur: Color.white.opacity(0.04), texte: .white.opacity(0.35))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                )
+        }
+    }
+
+    private func texteTuile(_ lettre: String, couleur: Color, texte: Color) -> some View {
+        Text(lettre)
+            .font(.system(size: tilleFont, weight: .bold, design: .monospaced))
+            .foregroundColor(texte)
+            .frame(width: tilleSize, height: tilleSize)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(couleur)
+            )
+    }
+
+    /// Force la saisie en majuscules, commençant par la première lettre offerte,
+    /// et limitée à la longueur du mot.
+    private func normaliserProposition() {
+        var texte = proposition.uppercased().filter(\.isLetter)
+        if !texte.hasPrefix(premiereLettre) {
+            texte = premiereLettre + texte
+        }
+        if texte.count > nbLettres {
+            texte = String(texte.prefix(nbLettres))
+        }
+        if texte != proposition {
+            proposition = texte
+        }
+    }
+
     // MARK: - Dimensions tuiles
 
     private var tilleSize: CGFloat {
-        let count = CGFloat(motSecret.count)
+        let count = CGFloat(nbLettres)
         let maxWidth: CGFloat = UIScreen.main.bounds.width - 48
         let spacing: CGFloat = 5
         let available = maxWidth - (count - 1) * spacing
@@ -399,12 +1262,14 @@ struct JeuView: View {
     }
 
     private var propositionValide: Bool {
-        proposition.count == motSecret.count && proposition.allSatisfy(\.isLetter)
+        proposition.count == nbLettres && proposition.allSatisfy(\.isLetter)
     }
 
     // MARK: - Logique (inspirée de la version Python)
 
     private func proposer() {
+        guard case .enCours = etat else { return }
+
         let prop = proposition.uppercased()
         guard prop.count == motSecret.count else { return }
 
@@ -413,7 +1278,8 @@ struct JeuView: View {
         if prop == motSecret {
             let tuiles = motSecret.map { LettreTuile(lettre: String($0), etat: .bonnePlace) }
             historique.append(tuiles)
-            etat = .gagne(essais: essai)
+            dernierScore = scorePourVictoire(essais: essai)
+            traiterVictoire()
             return
         }
 
@@ -443,17 +1309,95 @@ struct JeuView: View {
                     resultats[i] = LettreTuile(lettre: String(c).lowercased(), etat: .mauvaisePlace)
                     lettres[c]! -= 1
                 } else {
-                    resultats[i] = LettreTuile(lettre: "·", etat: .absent)
+                    resultats[i] = LettreTuile(lettre: String(c), etat: .absent)
                 }
             }
         }
 
         historique.append(resultats.compactMap { $0 })
-        proposition = ""
+        proposition = premiereLettre
 
         if essai >= maxEssais {
-            etat = .perdu(mot: motSecret)
+            terminerSurEchec()
         }
+    }
+
+    private func scorePourVictoire(essais: Int) -> Int {
+        let rapidite = maxEssais - essais + 1
+        let base = 50 + nbLettres * 10 + rapidite * 15
+        return Int((Double(base) * niveauActuel.multiplicateurScore).rounded())
+    }
+
+    private func traiterVictoire() {
+        if mode != .duo {
+            gestionnaireProfils.enregistrerVictoire(score: dernierScore)
+        }
+
+        switch mode {
+        case .survie:
+            let pointsGagnes = Int((Double(dernierScore) * multiplicateurSurvie).rounded())
+            scoreSurvie += pointsGagnes
+            etat = .gagne(essais: essai)
+
+        case .tournoi:
+            scoreTournoi += dernierScore
+            if mancheTournoi == nombreManchesTournoi {
+                gestionnaireProfils.enregistrerTournoi(score: scoreTournoi, gagne: true)
+                etat = .tournoiTermine(score: scoreTournoi, gagne: true)
+            } else {
+                etat = .gagne(essais: essai)
+            }
+
+        case .progression, .duo:
+            etat = .gagne(essais: essai)
+        }
+    }
+
+    private func terminerSurEchec() {
+        if mode == .survie {
+            let pointsPerdus = scoreSurvie
+            scoreSurvie = 0
+            gestionnaireProfils.enregistrerDefaite()
+            etat = .surviePerdue(mot: motSecret, score: pointsPerdus)
+            return
+        }
+
+        if mode != .duo {
+            gestionnaireProfils.enregistrerDefaite()
+        }
+
+        if mode == .tournoi {
+            gestionnaireProfils.enregistrerTournoi(score: scoreTournoi, gagne: false)
+        }
+        etat = .perdu(mot: motSecret)
+    }
+
+    private func continuerSurvie() {
+        multiplicateurSurvie += 0.5
+        commencerMotSuivant()
+    }
+
+    private func encaisserSurvie() {
+        gestionnaireProfils.enregistrerSurvie(score: scoreSurvie)
+        etat = .survieEncaissee(score: scoreSurvie)
+    }
+
+    private func continuerTournoi() {
+        guard mancheTournoi < nombreManchesTournoi else { return }
+        mancheTournoi += 1
+        commencerMotSuivant()
+    }
+
+    private func commencerMotSuivant() {
+        guard theme != nil || generationPokemon != nil else { return }
+
+        motSecret = motAleatoirePourPartie(sauf: motSecret)
+        proposition = premiereLettre
+        historique = []
+        essai = 0
+        dernierScore = 0
+        tuileSelectionnee = nil
+        etat = .enCours
     }
 
     // MARK: - UI Helpers
@@ -479,7 +1423,7 @@ struct JeuView: View {
             Button {
                 resetPartie()
             } label: {
-                Label("Rejouer", systemImage: "arrow.counterclockwise")
+                Label(libelleRejouer, systemImage: "arrow.counterclockwise")
                     .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -507,10 +1451,40 @@ struct JeuView: View {
         .padding(.top, 8)
     }
 
+    private var libelleRejouer: String {
+        switch mode {
+        case .progression: return "Nouveau mot"
+        case .tournoi: return "Rejouer le tournoi"
+        case .survie: return "Nouvelle tentative"
+        case .duo: return "Rejouer"
+        }
+    }
+
     private func resetPartie() {
-        proposition = ""
+        if mode != .duo {
+            niveauActuel = gestionnaireProfils.profilActif.niveau
+        } else {
+            niveauActuel = niveauInitial
+        }
+
+        let nouveauMot = motAleatoirePourPartie(sauf: motSecret)
+        motSecret = nouveauMot.uppercased()
+        proposition = String(motSecret.prefix(1))
         historique = []
         essai = 0
+        scoreTournoi = 0
+        mancheTournoi = 1
+        scoreSurvie = 0
+        multiplicateurSurvie = 1.0
+        dernierScore = 0
+        tuileSelectionnee = nil
         etat = .enCours
+    }
+
+    private func motAleatoirePourPartie(sauf: String?) -> String {
+        if let generationPokemon {
+            return generationPokemon.motAleatoire(niveau: niveauActuel, sauf: sauf)
+        }
+        return theme?.motAleatoire(niveau: niveauActuel, sauf: sauf) ?? motSecret
     }
 }
