@@ -28,6 +28,11 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
 - voir les indices lettre par lettre après chaque essai ;
 - toucher une case pour revoir sa signification ;
 - rejouer directement après une victoire ou une défaite.
+- jouer avec les personnages des Simpsons ou de South Park ;
+- retrouver des produits et services Apple, des pays ou des objets de la maison ;
+- profiter d'au moins 70 mots uniques dans chaque thème classique ;
+- voir une progression de 0 à 100 % par thème et retrouver uniquement des mots
+  qui n'ont pas encore été devinés ;
 - progresser automatiquement du niveau Débutant au niveau Maître ;
 - créer plusieurs profils, chacun avec sa propre progression et ses records ;
 - choisir le thème Pokémon puis une génération de la I à la IX ;
@@ -60,7 +65,8 @@ Sombre : lettre absente du mot secret.
 mode, l'écran de jeu, le calcul des indices et les fenêtres de fin de partie.
 
 `Tusmo/Progression.swift` contient les cinq niveaux de difficulté, les modes
-de jeu, le modèle de profil et la sauvegarde locale des profils.
+de jeu, le modèle de profil, la progression par thème et la sauvegarde locale
+des profils.
 
 `Tusmo/Mots.swift` contient les thèmes et le tirage d'un mot adapté au niveau
 du profil actif.

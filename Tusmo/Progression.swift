@@ -131,6 +131,7 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     var meilleurScoreSurvie: Int
     var tournoisJoues: Int
     var tournoisGagnes: Int
+    var motsTrouvesParTheme: [String: Set<String>]
 
     init(id: UUID = UUID(), nom: String) {
         self.id = id
@@ -144,6 +145,59 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         self.meilleurScoreSurvie = 0
         self.tournoisJoues = 0
         self.tournoisGagnes = 0
+        self.motsTrouvesParTheme = [:]
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case nom
+        case niveau
+        case experience
+        case partiesJouees
+        case victoires
+        case scoreTotal
+        case meilleurScore
+        case meilleurScoreSurvie
+        case tournoisJoues
+        case tournoisGagnes
+        case motsTrouvesParTheme
+    }
+
+    /// Permet de conserver les profils créés avant l'ajout de la progression
+    /// par thème : le nouveau champ est facultatif à la lecture.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        nom = try container.decode(String.self, forKey: .nom)
+        niveau = try container.decode(NiveauJeu.self, forKey: .niveau)
+        experience = try container.decode(Int.self, forKey: .experience)
+        partiesJouees = try container.decode(Int.self, forKey: .partiesJouees)
+        victoires = try container.decode(Int.self, forKey: .victoires)
+        scoreTotal = try container.decode(Int.self, forKey: .scoreTotal)
+        meilleurScore = try container.decode(Int.self, forKey: .meilleurScore)
+        meilleurScoreSurvie = try container.decode(Int.self, forKey: .meilleurScoreSurvie)
+        tournoisJoues = try container.decode(Int.self, forKey: .tournoisJoues)
+        tournoisGagnes = try container.decode(Int.self, forKey: .tournoisGagnes)
+        motsTrouvesParTheme = try container.decodeIfPresent(
+            [String: Set<String>].self,
+            forKey: .motsTrouvesParTheme
+        ) ?? [:]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(nom, forKey: .nom)
+        try container.encode(niveau, forKey: .niveau)
+        try container.encode(experience, forKey: .experience)
+        try container.encode(partiesJouees, forKey: .partiesJouees)
+        try container.encode(victoires, forKey: .victoires)
+        try container.encode(scoreTotal, forKey: .scoreTotal)
+        try container.encode(meilleurScore, forKey: .meilleurScore)
+        try container.encode(meilleurScoreSurvie, forKey: .meilleurScoreSurvie)
+        try container.encode(tournoisJoues, forKey: .tournoisJoues)
+        try container.encode(tournoisGagnes, forKey: .tournoisGagnes)
+        try container.encode(motsTrouvesParTheme, forKey: .motsTrouvesParTheme)
     }
 
     var experienceAffichee: String {
@@ -156,6 +210,20 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     var progressionNiveau: Double {
         guard !niveau.estMaximum else { return 1 }
         return min(1, Double(experience) / Double(niveau.experienceNecessaire))
+    }
+
+    func motsTrouves(cle: String) -> Set<String> {
+        motsTrouvesParTheme[cle] ?? []
+    }
+
+    func progressionMots(cle: String, mots: [String]) -> Int {
+        Set(mots).intersection(motsTrouves(cle: cle)).count
+    }
+
+    func progression(cle: String, mots: [String]) -> Double {
+        let motsUniques = Set(mots)
+        guard !motsUniques.isEmpty else { return 0 }
+        return min(1, Double(progressionMots(cle: cle, mots: mots)) / Double(motsUniques.count))
     }
 
     mutating func enregistrerVictoire(score: Int) {
@@ -186,6 +254,10 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         tournoisJoues += 1
         tournoisGagnes += gagne ? 1 : 0
         meilleurScore = max(meilleurScore, score)
+    }
+
+    mutating func enregistrerMotTrouve(_ mot: String, cle: String) {
+        motsTrouvesParTheme[cle, default: []].insert(mot.uppercased())
     }
 }
 
@@ -227,6 +299,40 @@ final class GestionnaireProfils: ObservableObject {
     func selectionnerProfil(_ id: UUID) {
         guard profils.contains(where: { $0.id == id }) else { return }
         profilActifID = id
+        sauvegarder()
+    }
+
+    func motsTrouves(cle: String) -> Set<String> {
+        profilActif.motsTrouves(cle: cle)
+    }
+
+    func progressionTheme(_ theme: Theme) -> Double {
+        if theme.estPokemon {
+            let total = GenerationPokemon.totalMots
+            guard total > 0 else { return 0 }
+            let trouves = GenerationPokemon.allCases.reduce(0) {
+                $0 + profilActif.progressionMots(cle: $1.cleProgression, mots: $1.mots)
+            }
+            return min(1, Double(trouves) / Double(total))
+        }
+        return profilActif.progression(cle: theme.cleProgression, mots: theme.mots)
+    }
+
+    func estThemeComplet(_ theme: Theme) -> Bool {
+        progressionTheme(theme) >= 1
+    }
+
+    func progressionGeneration(_ generation: GenerationPokemon) -> Double {
+        profilActif.progression(cle: generation.cleProgression, mots: generation.mots)
+    }
+
+    func estGenerationComplete(_ generation: GenerationPokemon) -> Bool {
+        progressionGeneration(generation) >= 1
+    }
+
+    func enregistrerMotTrouve(_ mot: String, cle: String) {
+        guard let index = indexProfilActif else { return }
+        profils[index].enregistrerMotTrouve(mot, cle: cle)
         sauvegarder()
     }
 

@@ -58,6 +58,7 @@ enum EtatJeu {
     case survieEncaissee(score: Int)
     case surviePerdue(mot: String, score: Int)
     case tournoiTermine(score: Int, gagne: Bool)
+    case themeTermine
 }
 
 // MARK: - Écran principal (Navigation)
@@ -76,6 +77,10 @@ struct ContentView: View {
 // MARK: - Fond commun
 
 private let fondJeu = Color(red: 0.06, green: 0.06, blue: 0.1)
+
+private func pourcentage(_ progression: Double) -> Int {
+    Int((progression * 100).rounded())
+}
 
 // MARK: - Menu (choix du mode)
 
@@ -492,6 +497,36 @@ struct ChoixModeView: View {
 
 // MARK: - Solo : choix du thème
 
+private struct VueThemeTermine: View {
+    let titre: String
+    let emoji: String
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+            VStack(spacing: 16) {
+                Text(emoji)
+                    .font(.system(size: 56))
+                Text("Thème terminé")
+                    .font(.title.weight(.bold))
+                    .foregroundColor(.white)
+                Text("100 % de \(titre) a été découvert.")
+                    .foregroundColor(.green)
+                    .multilineTextAlignment(.center)
+                Button("Retour") {
+                    dismiss()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+            }
+            .padding(32)
+        }
+        .navigationBarHidden(true)
+    }
+}
+
 struct ChoixThemeView: View {
     let mode: ModeJeu
     @Environment(\.dismiss) private var dismiss
@@ -527,10 +562,24 @@ struct ChoixThemeView: View {
                 ScrollView {
                     LazyVGrid(columns: colonnes, spacing: 12) {
                         ForEach(BanqueDeMots.tous) { theme in
-                            NavigationLink {
-                                destinationPourTheme(theme)
-                            } label: {
+                            if gestionnaireProfils.estThemeComplet(theme) {
                                 carteTheme(theme)
+                                    .opacity(0.55)
+                                    .overlay(alignment: .topTrailing) {
+                                        Text("Terminé")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundColor(.green)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(Capsule().fill(Color.green.opacity(0.14)))
+                                            .padding(8)
+                                    }
+                            } else {
+                                NavigationLink {
+                                    destinationPourTheme(theme)
+                                } label: {
+                                    carteTheme(theme)
+                                }
                             }
                         }
                     }
@@ -548,28 +597,43 @@ struct ChoixThemeView: View {
             ChoixGenerationPokemonView(theme: theme, mode: mode)
         } else {
             let niveau = gestionnaireProfils.profilActif.niveau
-            JeuView(
-                motSecret: theme.motAleatoire(niveau: niveau),
-                theme: theme,
-                mode: mode,
-                niveau: niveau
-            )
+            let exclus = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
+            if let motSecret = theme.motAleatoireNonTrouve(niveau: niveau, exclus: exclus) {
+                JeuView(
+                    motSecret: motSecret,
+                    theme: theme,
+                    mode: mode,
+                    niveau: niveau
+                )
+            } else {
+                VueThemeTermine(titre: theme.nom, emoji: theme.emoji)
+            }
         }
     }
 
     private func carteTheme(_ theme: Theme) -> some View {
-        VStack(spacing: 8) {
+        let progression = gestionnaireProfils.progressionTheme(theme)
+
+        return VStack(spacing: 8) {
             Text(theme.emoji)
                 .font(.system(size: 32))
             Text(theme.nom)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
-            Text(theme.estPokemon ? "9 générations" : "\(theme.mots.count) mots")
+            Text(theme.estPokemon
+                 ? "\(GenerationPokemon.totalMots) Pokémon · 9 générations"
+                 : "\(theme.mots.count) mots")
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.4))
+            ProgressView(value: progression)
+                .tint(theme.estPokemon ? .yellow : .red)
+            Text("\(pourcentage(progression)) % découvert")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(progression >= 1 ? .green : .white.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 16)
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white.opacity(0.06))
@@ -617,9 +681,7 @@ struct ChoixGenerationPokemonView: View {
                 ScrollView {
                     VStack(spacing: 12) {
                         ForEach(GenerationPokemon.allCases) { generation in
-                            NavigationLink {
-                                jeuPourGeneration(generation)
-                            } label: {
+                            if gestionnaireProfils.estGenerationComplete(generation) {
                                 HStack(spacing: 14) {
                                     Text("G\(generation.rawValue)")
                                         .font(.headline.monospaced())
@@ -634,9 +696,9 @@ struct ChoixGenerationPokemonView: View {
                                         Text(generation.titre)
                                             .font(.headline)
                                             .foregroundColor(.white)
-                                        Text("\(generation.region) · \(generation.mots.count) Pokémon")
+                                        Text("\(generation.region) · \(generation.mots.count) Pokémon · 100 %")
                                             .font(.caption)
-                                            .foregroundColor(.white.opacity(0.5))
+                                            .foregroundColor(.green.opacity(0.8))
                                     }
 
                                     Spacer()
@@ -648,6 +710,22 @@ struct ChoixGenerationPokemonView: View {
                                     RoundedRectangle(cornerRadius: 16)
                                         .fill(Color.white.opacity(0.06))
                                 )
+                                .opacity(0.55)
+                                .overlay(alignment: .topTrailing) {
+                                    Text("Terminé")
+                                        .font(.caption2.weight(.bold))
+                                        .foregroundColor(.green)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.green.opacity(0.14)))
+                                        .padding(8)
+                                }
+                            } else {
+                                NavigationLink {
+                                    jeuPourGeneration(generation)
+                                } label: {
+                                    carteGeneration(generation)
+                                }
                             }
                         }
                     }
@@ -659,14 +737,61 @@ struct ChoixGenerationPokemonView: View {
         .navigationBarHidden(true)
     }
 
+    @ViewBuilder
     private func jeuPourGeneration(_ generation: GenerationPokemon) -> some View {
         let niveau = gestionnaireProfils.profilActif.niveau
-        return JeuView(
-            motSecret: generation.motAleatoire(niveau: niveau),
-            theme: theme,
-            generationPokemon: generation,
-            mode: mode,
-            niveau: niveau
+        let exclus = gestionnaireProfils.motsTrouves(cle: generation.cleProgression)
+        if let motSecret = generation.motAleatoireNonTrouve(
+            niveau: niveau,
+            exclus: exclus
+        ) {
+            JeuView(
+                motSecret: motSecret,
+                theme: theme,
+                generationPokemon: generation,
+                mode: mode,
+                niveau: niveau
+            )
+        } else {
+            VueThemeTermine(titre: "Pokémon · \(generation.titre)", emoji: "⚡️")
+        }
+    }
+
+    private func carteGeneration(_ generation: GenerationPokemon) -> some View {
+        let progression = gestionnaireProfils.progressionGeneration(generation)
+
+        return HStack(spacing: 14) {
+            Text("G\(generation.rawValue)")
+                .font(.headline.monospaced())
+                .foregroundColor(.black)
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Color.yellow)
+                )
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(generation.titre)
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Text("\(generation.region) · \(generation.mots.count) Pokémon")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.5))
+                ProgressView(value: progression)
+                    .tint(.yellow)
+                Text("\(pourcentage(progression)) % découvert")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.55))
+            }
+
+            Spacer()
+            Image(systemName: "chevron.right")
+                .foregroundColor(.white.opacity(0.3))
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.06))
         )
     }
 }
@@ -964,6 +1089,10 @@ struct JeuView: View {
                 overlayResultat {
                     contenuTournoiTermine(score: score, gagne: gagne)
                 }
+            case .themeTermine:
+                overlayResultat {
+                    contenuThemeTermine
+                }
             }
         }
         .navigationBarHidden(true)
@@ -1144,6 +1273,37 @@ struct JeuView: View {
         }
     }
 
+    private var contenuThemeTermine: some View {
+        VStack(spacing: 16) {
+            Text("🎯")
+                .font(.system(size: 60))
+            Text("Thème terminé !")
+                .font(.system(size: 30, weight: .black, design: .rounded))
+                .foregroundColor(.white)
+            Text("100 % des mots disponibles ont été trouvés.")
+                .font(.title3.weight(.semibold))
+                .foregroundColor(.green)
+                .multilineTextAlignment(.center)
+
+            if mode == .survie {
+                Text("Score encaissé : \(scoreSurvie) points")
+                    .font(.subheadline)
+                    .foregroundColor(.orange)
+            } else if mode == .tournoi {
+                Text("Score actuel : \(scoreTournoi) points")
+                    .font(.subheadline)
+                    .foregroundColor(.yellow)
+            }
+
+            Text("Choisis un autre thème pour continuer à jouer.")
+                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.6))
+                .multilineTextAlignment(.center)
+
+            boutonMenu
+        }
+    }
+
     private func motSolution(_ solution: String) -> some View {
         HStack(spacing: 5) {
             ForEach(Array(solution.enumerated()), id: \.offset) { _, c in
@@ -1173,6 +1333,16 @@ struct JeuView: View {
             return "\(theme.emoji) \(theme.nom)"
         }
         return "Mot secret"
+    }
+
+    private var progressionCle: String? {
+        if let generationPokemon {
+            return generationPokemon.cleProgression
+        }
+        if let theme, !theme.estPokemon {
+            return theme.cleProgression
+        }
+        return nil
     }
 
     private var nbLettres: Int { motSecret.count }
@@ -1330,6 +1500,9 @@ struct JeuView: View {
 
     private func traiterVictoire() {
         if mode != .duo {
+            if let progressionCle {
+                gestionnaireProfils.enregistrerMotTrouve(motSecret, cle: progressionCle)
+            }
             gestionnaireProfils.enregistrerVictoire(score: dernierScore)
         }
 
@@ -1391,7 +1564,12 @@ struct JeuView: View {
     private func commencerMotSuivant() {
         guard theme != nil || generationPokemon != nil else { return }
 
-        motSecret = motAleatoirePourPartie(sauf: motSecret)
+        guard let nouveauMot = motAleatoirePourPartie(sauf: motSecret) else {
+            terminerQuandThemeEstComplet()
+            return
+        }
+
+        motSecret = nouveauMot.uppercased()
         proposition = premiereLettre
         historique = []
         essai = 0
@@ -1451,6 +1629,23 @@ struct JeuView: View {
         .padding(.top, 8)
     }
 
+    private var boutonMenu: some View {
+        Button {
+            dismiss()
+        } label: {
+            Label("Choisir un autre thème", systemImage: "square.grid.2x2.fill")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(Color.red)
+                )
+        }
+        .padding(.top, 8)
+    }
+
     private var libelleRejouer: String {
         switch mode {
         case .progression: return "Nouveau mot"
@@ -1467,7 +1662,11 @@ struct JeuView: View {
             niveauActuel = niveauInitial
         }
 
-        let nouveauMot = motAleatoirePourPartie(sauf: motSecret)
+        guard let nouveauMot = motAleatoirePourPartie(sauf: motSecret) else {
+            etat = .themeTermine
+            return
+        }
+
         motSecret = nouveauMot.uppercased()
         proposition = String(motSecret.prefix(1))
         historique = []
@@ -1481,10 +1680,34 @@ struct JeuView: View {
         etat = .enCours
     }
 
-    private func motAleatoirePourPartie(sauf: String?) -> String {
-        if let generationPokemon {
-            return generationPokemon.motAleatoire(niveau: niveauActuel, sauf: sauf)
+    private func terminerQuandThemeEstComplet() {
+        if mode == .survie {
+            gestionnaireProfils.enregistrerSurvie(score: scoreSurvie)
+        } else if mode == .tournoi {
+            gestionnaireProfils.enregistrerTournoi(score: scoreTournoi, gagne: false)
         }
-        return theme?.motAleatoire(niveau: niveauActuel, sauf: sauf) ?? motSecret
+        etat = .themeTermine
+    }
+
+    private func motAleatoirePourPartie(sauf: String?) -> String? {
+        if mode == .duo {
+            return motSecret
+        }
+
+        guard let progressionCle else { return nil }
+        let exclus = gestionnaireProfils.motsTrouves(cle: progressionCle)
+
+        if let generationPokemon {
+            return generationPokemon.motAleatoireNonTrouve(
+                niveau: niveauActuel,
+                sauf: sauf,
+                exclus: exclus
+            )
+        }
+        return theme?.motAleatoireNonTrouve(
+            niveau: niveauActuel,
+            sauf: sauf,
+            exclus: exclus
+        )
     }
 }

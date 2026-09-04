@@ -24,6 +24,17 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         "Génération \(rawValue)"
     }
 
+    /// Clé stable utilisée pour sauvegarder les Pokémon déjà trouvés.
+    var cleProgression: String {
+        "pokemon.generation.\(rawValue)"
+    }
+
+    static var totalMots: Int {
+        allCases.reduce(0) { total, generation in
+            total + Set(generation.mots).count
+        }
+    }
+
     var region: String {
         switch self {
         case .une: return "Kanto"
@@ -127,23 +138,36 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
     }
 
     func motAleatoire(niveau: NiveauJeu, sauf: String? = nil) -> String {
-        let compatibles = mots.filter {
-            niveau.longueurs.contains($0.count) && $0 != sauf
-        }
-        let autresMots = mots.filter { $0 != sauf }
-        guard !autresMots.isEmpty else { return "PIKACHU" }
+        motAleatoireNonTrouve(niveau: niveau, sauf: sauf, exclus: []) ?? "PIKACHU"
+    }
 
-        if !compatibles.isEmpty {
-            return compatibles.randomElement() ?? "PIKACHU"
+    /// Tire un Pokémon qui n'appartient pas à `exclus`.
+    /// Retourne `nil` quand toute la génération est découverte.
+    func motAleatoireNonTrouve(
+        niveau: NiveauJeu,
+        sauf: String? = nil,
+        exclus: Set<String>
+    ) -> String? {
+        let nonExclus = Array(Set(mots.filter { !exclus.contains($0) }))
+        let disponibles = nonExclus.count > 1
+            ? nonExclus.filter { $0 != sauf }
+            : nonExclus
+        guard !disponibles.isEmpty else { return nil }
+
+        let compatibles = disponibles.filter {
+            niveau.longueurs.contains($0.count)
+        }
+        if let mot = compatibles.randomElement() {
+            return mot
         }
 
-        let distanceMinimum = autresMots
+        let distanceMinimum = disponibles
             .map { distance($0.count, de: niveau.longueurs) }
             .min() ?? 0
-        let choix = autresMots.filter {
+        let choix = disponibles.filter {
             distance($0.count, de: niveau.longueurs) == distanceMinimum
         }
-        return choix.randomElement() ?? "PIKACHU"
+        return choix.randomElement()
     }
 
     private func distance(_ longueur: Int, de plage: ClosedRange<Int>) -> Int {
