@@ -92,3 +92,24 @@ chaque terme reçoit un poids de notoriété indépendant de sa longueur.
 et leur tirage par niveau.
 
 `docs/screenshots` contient les captures utilisées dans ce README.
+
+## Version web
+
+Une version web jouable se trouve dans `web/`. Elle reprend les banques Swift,
+les profils, la progression par thème, le tournoi, la survie et le duo local.
+Les comptes email permettent de synchroniser les profils entre navigateurs ;
+la sauvegarde est versionnée pour détecter les modifications concurrentes.
+
+Pour la lancer localement avec Node.js 24 et PostgreSQL :
+
+```sh
+cd web
+npm install
+npm run banks
+DATABASE_URL=postgres://tusmo:mot-de-passe@localhost:5432/tusmo npm start
+```
+
+Le déploiement serveur utilise `web/compose.yaml` : PostgreSQL reste privé,
+l’application écoute sur le réseau Docker et Nginx expose le port 80. Le
+fichier `web/.env` ne doit jamais être commité. HTTPS et `COOKIE_SECURE=true`
+seront activés dès qu’un domaine sera associé au serveur.

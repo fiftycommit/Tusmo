@@ -1,0 +1,8 @@
+.git
+.gitignore
+web/.env
+web/node_modules
+DerivedData
+build
+.build
+.DS_Store

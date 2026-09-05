@@ -20,3 +20,8 @@ Package.resolved
 *.xcarchive
 *.dSYM
 *.ipa
+
+# Version web locale
+web/.env
+web/node_modules/
+web/public/banks.json
