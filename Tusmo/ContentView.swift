@@ -974,7 +974,27 @@ struct JeuView: View {
                             .foregroundColor(.white.opacity(0.5))
                     }
                     Spacer()
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if let difficulteMot {
+                            HStack(spacing: 4) {
+                                Text(difficulteMot.emoji)
+                                Text(difficulteMot.nom)
+                                    .font(.caption2.weight(.bold))
+                            }
+                            .foregroundColor(couleurDifficulteMot)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(couleurDifficulteMot.opacity(0.16))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(couleurDifficulteMot.opacity(0.45), lineWidth: 1)
+                            )
+                            .accessibilityLabel("Difficulté du mot : \(difficulteMot.nom)")
+                        }
+
                         HStack(spacing: 4) {
                             ForEach(0..<maxEssais, id: \.self) { i in
                                 Circle()
@@ -1468,6 +1488,30 @@ struct JeuView: View {
     }
 
     private var nbLettres: Int { motSecret.count }
+
+    /// Difficulté éditoriale du mot actuel, indépendante du niveau du profil.
+    private var difficulteMot: NiveauJeu? {
+        if let generationPokemon {
+            return generationPokemon.niveauDuMot(motSecret)
+        }
+        if let theme, !theme.estPokemon {
+            return theme.niveauDuMot(motSecret)
+        }
+        // En mode 2 joueurs, le mot est choisi par l'autre joueur et n'a pas
+        // de classement thématique fiable à afficher.
+        return nil
+    }
+
+    private var couleurDifficulteMot: Color {
+        switch difficulteMot {
+        case .debutant: return .green
+        case .apprenti: return .blue
+        case .confirme: return .yellow
+        case .expert: return .orange
+        case .maitre: return .purple
+        case nil: return .white
+        }
+    }
 
     private var multiplicateurSuivantTexte: String {
         String(format: "×%.1f", multiplicateurSurvie + 0.5)

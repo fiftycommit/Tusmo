@@ -113,6 +113,31 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
+    /// Pokémon emblématiques à proposer lors de la découverte d'une
+    /// génération. Les formes moins connues arrivent seulement ensuite.
+    private var premiersMots: Set<String> {
+        switch self {
+        case .une:
+            return ["PIKACHU", "SALAMECHE", "CARAPUCE", "DRACAUFEU", "MEWTWO", "EVOLI"]
+        case .deux:
+            return ["LUGIA", "MENTALI", "NOCTALI", "TYRANOCIF", "SUICUNE"]
+        case .trois:
+            return ["POUSSIFEU", "GARDEVOIR", "KYOGRE", "GROUDON", "RAYQUAZA", "BRASEGALI"]
+        case .quatre:
+            return ["TIPLOUF", "LUCARIO", "ARCEUS", "GIRATINA", "DARKRAI", "SHAYMIN"]
+        case .cinq:
+            return ["GRUIKUI", "ZORUA", "ZOROARK", "RESHIRAM", "ZEKROM", "KYUREM"]
+        case .six:
+            return ["FEUNNEC", "GRENOUSSE", "NYMPHALI", "XERNEAS", "YVELTAL", "ZYGARDE"]
+        case .sept:
+            return ["BRINDIBOU", "MIMIQUI", "LUNALA", "SOLGALEO", "MELTAN", "MELMETAL"]
+        case .huit:
+            return ["FLAMBINO", "DURALUGON", "SHIFOURS", "ZACIAN", "ZAMAZENTA", "ETERNATOS"]
+        case .neuf:
+            return ["POUSSACHA", "TINKATON", "PALAFIN", "KORAIDON", "MIRAIDON", "OGERPON"]
+        }
+    }
+
     var region: String {
         switch self {
         case .une: return "Kanto"
@@ -231,6 +256,15 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
             ? nonExclus.filter { $0 != sauf }
             : nonExclus
         guard !disponibles.isEmpty else { return nil }
+
+        // Une génération commence par ses mascottes, starters et légendaires
+        // les plus connus, quel que soit le nombre de lettres de leur nom.
+        if niveau == .debutant {
+            let premiersDisponibles = disponibles.filter { premiersMots.contains($0) }
+            if let mot = premiersDisponibles.randomElement() {
+                return mot
+            }
+        }
 
         let compatibles = disponibles.filter {
             niveauDuMot($0) == niveau

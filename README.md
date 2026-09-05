@@ -35,6 +35,14 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
   liés à la marque ;
 - classer les termes par familiarité, du niveau Débutant aux références de
   niveau Maître, indépendamment du nombre de lettres ;
+- calibrer chaque thème avec une progression éditoriale complète : références
+  évidentes en France, termes courants, puis références spécialisées ;
+- afficher la difficulté éditoriale du mot dans une pastille dédiée pendant
+  la partie ;
+- commencer chaque thème par quelques références emblématiques, puis ouvrir
+  progressivement les termes moins connus ; les termes français ont été
+  vérifiés à partir de la distinction facile/moyen/difficile de
+  [Undercover](https://undercover.gg/fr/words) ;
 - voir une progression de 0 à 100 % par thème et retrouver uniquement des mots
   qui n'ont pas encore été devinés ;
 - progresser automatiquement du niveau Débutant au niveau Maître ;
