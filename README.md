@@ -29,10 +29,10 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
 - toucher une case pour revoir sa signification ;
 - rejouer directement après une victoire ou une défaite.
 - jouer avec les personnages des Simpsons ou de South Park ;
-- retrouver des produits et services Apple, des pays ou des objets de la maison ;
-- profiter d'au moins 70 mots uniques dans les thèmes généralistes ;
-- jouer avec une banque Apple volontairement limitée à 50 termes réellement
-  liés à la marque ;
+- retrouver des produits et technologies Apple, des pays ou des objets de la maison ;
+- jouer avec des banques séparées pour les artistes, les villes et les apps / services internet ;
+- profiter de banques généralement riches, sans remplir artificiellement un niveau
+  quand le thème ne possède pas assez de références justes ;
 - classer les termes par familiarité, du niveau Débutant aux références de
   niveau Maître, indépendamment du nombre de lettres ;
 - calibrer chaque thème avec une progression éditoriale complète : références
@@ -40,9 +40,8 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
 - afficher la difficulté éditoriale du mot dans une pastille dédiée pendant
   la partie ;
 - commencer chaque thème par quelques références emblématiques, puis ouvrir
-  progressivement les termes moins connus ; les termes français ont été
-  vérifiés à partir de la distinction facile/moyen/difficile de
-  [Undercover](https://undercover.gg/fr/words) ;
+  progressivement les termes moins connus ; les mots sont classés selon leur
+  association spontanée au thème dans un contexte français ;
 - voir une progression de 0 à 100 % par thème et retrouver uniquement des mots
   qui n'ont pas encore été devinés ;
 - progresser automatiquement du niveau Débutant au niveau Maître, séparément
@@ -84,10 +83,10 @@ mode, l'écran de jeu, le calcul des indices et les fenêtres de fin de partie.
 de jeu, le modèle de profil, la progression par thème et la sauvegarde locale
 des profils.
 
-`Tusmo/Mots.swift` contient les thèmes et le tirage d'un mot adapté au niveau
-du profil actif. Chaque banque est ordonnée du terme le plus connu au plus
-spécifique et chaque terme reçoit un poids de notoriété indépendant de sa
-longueur.
+`Tusmo/Mots.swift` contient les thèmes, leurs groupes éditoriaux et le tirage
+d'un mot adapté au niveau du profil actif. Chaque thème possède sa propre
+progression : une banque peut avoir des niveaux Maître courts ou vides, et
+chaque terme reçoit un poids de notoriété indépendant de sa longueur.
 
 `Tusmo/Pokemon.swift` contient les banques de Pokémon des générations I à IX
 et leur tirage par niveau.

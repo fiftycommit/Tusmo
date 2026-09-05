@@ -35,14 +35,27 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Poids de familiarité propre aux Pokémon de cette génération.
-    /// L'ordre de la banque va du plus connu au plus spécifique, avec des
-    /// corrections pour les mascottes et les Pokémon emblématiques.
+    /// Poids éditorial propre à la génération.
+    /// La difficulté mesure la notoriété du Pokémon, pas la longueur de son
+    /// nom ni son numéro de génération.
     var poidsParMot: [String: Int] {
-        MoteurDifficulte.poidsParOrdreDeNotoriete(
-            mots,
-            surcharges: surchargesNotoriete
-        )
+        let plages: [ClosedRange<Int>] = [80...100, 60...79, 40...59, 20...39, 1...19]
+        var resultats: [String: Int] = [:]
+
+        for (index, groupe) in motsParNiveau.enumerated() {
+            let plage = plages[index]
+            let denominateur = max(groupe.count - 1, 1)
+            let amplitude = plage.upperBound - plage.lowerBound
+
+            for (position, mot) in groupe.enumerated() {
+                let poids = plage.upperBound - Int(
+                    (Double(position) / Double(denominateur) * Double(amplitude)).rounded()
+                )
+                resultats[mot] = poids
+            }
+        }
+
+        return resultats
     }
 
     func poidsDuMot(_ mot: String) -> Int {
@@ -60,82 +73,10 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    private var surchargesNotoriete: [String: Int] {
-        switch self {
-        case .une:
-            return [
-                "PIKACHU": 100, "DRACAUFEU": 98, "MEWTWO": 96,
-                "TORTANK": 94, "SALAMECHE": 94, "CARAPUCE": 94,
-                "EVOLI": 93, "RAICHU": 88, "LEVIATOR": 88
-            ]
-        case .deux:
-            return [
-                "LUGIA": 100, "NOCTALI": 94, "MENTALI": 94,
-                "TYRANOCIF": 93, "CELEBI": 92, "SUICUNE": 90,
-                "RAIKOU": 89, "ENTEI": 89, "AZUMARILL": 86
-            ]
-        case .trois:
-            return [
-                "GARDEVOIR": 96, "KYOGRE": 100, "GROUDON": 99,
-                "RAYQUAZA": 100, "ABSOL": 92, "LAGGRON": 91,
-                "BRASEGALI": 90
-            ]
-        case .quatre:
-            return [
-                "LUCARIO": 100, "ARCEUS": 99, "GIRATINA": 98,
-                "DARKRAI": 96, "SHAYMIN": 93, "ROSERADE": 87
-            ]
-        case .cinq:
-            return [
-                "ZORUA": 96, "ZOROARK": 96, "RESHIRAM": 99,
-                "ZEKROM": 99, "KYUREM": 96, "VICTINI": 93
-            ]
-        case .six:
-            return [
-                "GRENOUSSE": 96, "NYMPHALI": 97, "XERNEAS": 99,
-                "YVELTAL": 98, "ZYGARDE": 95
-            ]
-        case .sept:
-            return [
-                "MIMIQUI": 100, "LUNALA": 98, "SOLGALEO": 98,
-                "MELTAN": 96, "MELMETAL": 96, "LOUGAROC": 89
-            ]
-        case .huit:
-            return [
-                "ZACIAN": 100, "ZAMAZENTA": 99, "ETERNATOS": 97,
-                "CALYREX": 93, "SHIFOURS": 90, "DURALUGON": 89
-            ]
-        case .neuf:
-            return [
-                "MIRAIDON": 100, "KORAIDON": 100, "PALAFIN": 95,
-                "OGERPON": 95, "TERAPAGOS": 94, "TINKATON": 93
-            ]
-        }
-    }
-
     /// Pokémon emblématiques à proposer lors de la découverte d'une
     /// génération. Les formes moins connues arrivent seulement ensuite.
     private var premiersMots: Set<String> {
-        switch self {
-        case .une:
-            return ["PIKACHU", "SALAMECHE", "CARAPUCE", "DRACAUFEU", "MEWTWO", "EVOLI"]
-        case .deux:
-            return ["LUGIA", "MENTALI", "NOCTALI", "TYRANOCIF", "SUICUNE"]
-        case .trois:
-            return ["POUSSIFEU", "GARDEVOIR", "KYOGRE", "GROUDON", "RAYQUAZA", "BRASEGALI"]
-        case .quatre:
-            return ["TIPLOUF", "LUCARIO", "ARCEUS", "GIRATINA", "DARKRAI", "SHAYMIN"]
-        case .cinq:
-            return ["GRUIKUI", "ZORUA", "ZOROARK", "RESHIRAM", "ZEKROM", "KYUREM"]
-        case .six:
-            return ["FEUNNEC", "GRENOUSSE", "NYMPHALI", "XERNEAS", "YVELTAL", "ZYGARDE"]
-        case .sept:
-            return ["BRINDIBOU", "MIMIQUI", "LUNALA", "SOLGALEO", "MELTAN", "MELMETAL"]
-        case .huit:
-            return ["FLAMBINO", "DURALUGON", "SHIFOURS", "ZACIAN", "ZAMAZENTA", "ETERNATOS"]
-        case .neuf:
-            return ["POUSSACHA", "TINKATON", "PALAFIN", "KORAIDON", "MIRAIDON", "OGERPON"]
-        }
+        Set(motsParNiveau.first ?? [])
     }
 
     var region: String {
@@ -152,92 +93,88 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
     }
 
-    /// Noms sans accents, espaces ni signes : ils sont directement jouables
-    /// avec la saisie actuelle de Tusmo.
-    var mots: [String] {
+    /// Groupes éditoriaux : Débutant, Apprenti, Confirmé, Expert, Maître.
+    /// Une génération peut ne pas avoir de mot dans les derniers groupes.
+    private var motsParNiveau: [[String]] {
         switch self {
         case .une:
             return [
-                "SALAMECHE", "CARAPUCE", "PIKACHU", "RAICHU", "RATTATA",
-                "ROUCOOL", "PIAFABEC", "CANINOS", "MIAOUSS", "PSYKOKWAK",
-                "TETARTE", "LOKHLASS", "DRACAUFEU", "TORTANK", "LEVIATOR",
-                "EVOLI", "AQUALI", "VOLTALI", "PYROLI", "MEWTWO",
-                "ARTIKODIN", "ELECTHOR", "SULFURA"
+                ["PIKACHU", "SALAMECHE", "CARAPUCE", "DRACAUFEU", "TORTANK", "EVOLI", "MEWTWO"],
+                ["RAICHU", "MIAOUSS", "PSYKOKWAK", "LEVIATOR", "AQUALI", "VOLTALI", "PYROLI", "LOKHLASS", "ARTIKODIN", "ELECTHOR", "SULFURA"],
+                ["RATTATA", "ROUCOOL", "CANINOS", "TETARTE"],
+                ["PIAFABEC"],
+                []
             ]
         case .deux:
             return [
-                "GERMIGNON", "KAIMINUS", "FOUINETTE", "HOOTHOOT", "MIMIGAL",
-                "CROCRODIL", "PHARAMP", "MARILL", "AZUMARILL", "MENTALI",
-                "NOCTALI", "CORAYON", "SCARHINO", "FARFURET", "TEDDIURSA",
-                "URSARING", "LIMAGMA", "COCHIGNON", "CORBOSS", "LUGIA",
-                "CELEBI", "TYRANOCIF", "SUICUNE", "RAIKOU", "ENTEI"
+                ["LUGIA", "CELEBI", "TYRANOCIF", "SUICUNE", "ENTEI"],
+                ["GERMIGNON", "KAIMINUS", "MARILL", "MENTALI", "NOCTALI", "RAIKOU"],
+                ["FOUINETTE", "PHARAMP", "AZUMARILL", "SCARHINO", "FARFURET", "TEDDIURSA", "URSARING"],
+                ["HOOTHOOT", "MIMIGAL", "CROCRODIL", "CORAYON", "LIMAGMA", "COCHIGNON"],
+                []
             ]
         case .trois:
             return [
-                "ARCKO", "POUSSIFEU", "GOBOU", "GALIFEU", "FLOBIO",
-                "JUNGKO", "BRASEGALI", "LAGGRON", "ZIGZATON",
-                "GOELISE", "TARSAL", "KIRLIA", "GARDEVOIR", "MEDHYENA",
-                "GRAHYENA", "WAILMER", "BARPAU", "KRAKNOIX", "VIBRANINF",
-                "LIBEGON", "ALTARIA", "ABSOL", "LATIAS", "LATIOS",
-                "KYOGRE", "GROUDON", "RAYQUAZA", "JIRACHI", "DEOXYS"
+                ["GARDEVOIR", "BRASEGALI", "LAGGRON", "RAYQUAZA", "KYOGRE", "GROUDON", "ABSOL"],
+                ["ARCKO", "POUSSIFEU", "GOBOU", "JUNGKO", "TARSAL", "LIBEGON", "ALTARIA", "LATIAS", "LATIOS", "JIRACHI"],
+                ["GALIFEU", "FLOBIO", "KIRLIA", "ZIGZATON", "WAILMER", "BARPAU", "KRAKNOIX", "DEOXYS"],
+                ["GOELISE", "MEDHYENA", "GRAHYENA", "VIBRANINF"],
+                []
             ]
         case .quatre:
             return [
-                "TIPLOUF", "ETOURMI", "STARAVIA", "KEUNOTOR", "CRIKZIK",
-                "ROZBOUTON", "ROSERADE", "PACHIRISU",
-                "FLOATZEL", "CHERUBI", "BAUDRIVE", "MOUFFLAIR", "RIOLU",
-                "LUCARIO", "SCORVOL", "BLIZZI", "BLIZZAROI", "MOTISMA",
-                "CREHELF", "CREFOLLET", "CREFADET", "REGIGIGAS", "GIRATINA",
-                "ARCEUS", "DARKRAI", "SHAYMIN", "MANAPHY"
+                ["TIPLOUF", "LUCARIO", "GIRATINA", "ARCEUS", "DARKRAI"],
+                ["RIOLU", "PACHIRISU", "ROSERADE", "MOTISMA", "SHAYMIN", "MANAPHY", "REGIGIGAS"],
+                ["ETOURMI", "STARAVIA", "KEUNOTOR", "BAUDRIVE", "SCORVOL", "BLIZZAROI", "CREHELF", "CREFOLLET", "CREFADET", "CORBOSS"],
+                ["CRIKZIK", "ROZBOUTON", "FLOATZEL", "CHERUBI", "MOUFFLAIR", "BLIZZI"],
+                []
             ]
         case .cinq:
             return [
-                "GRUIKUI", "PONCHIOT", "FLAMAJOU", "FLOTAJOU", "RATENTIF",
-                "ROTOTAUPE", "DARUMACHO", "MARACACHI", "KUNGFUINE", "MASCAIMAN",
-                "ESCROCO", "ZORUA", "ZOROARK", "FRAGILADY", "VIVALDAIM", "EMOLGA",
-                "CARABING", "LANCARGOT", "SCALPION", "SCALPROIE",
-                "GAULET", "MIAMIASME", "ZEKROM", "RESHIRAM", "KYUREM",
-                "VICTINI", "MELOETTA", "GENESECT"
+                ["ZOROARK", "ZEKROM", "RESHIRAM", "KYUREM"],
+                ["ZORUA", "VICTINI", "GENESECT", "GRUIKUI", "EMOLGA", "DARUMACHO"],
+                ["PONCHIOT", "ROTOTAUPE", "MASCAIMAN", "ESCROCO", "FRAGILADY", "VIVALDAIM", "SCALPION", "SCALPROIE", "MELOETTA"],
+                ["FLAMAJOU", "FLOTAJOU", "RATENTIF", "MARACACHI", "KUNGFUINE", "CARABING", "LANCARGOT", "GAULET", "MIAMIASME"],
+                []
             ]
         case .six:
             return [
-                "MARISSON", "FEUNNEC", "GRENOUSSE", "SAPEREAU", "PEREGRAIN",
-                "GALVARAN", "AMAGARA", "NYMPHALI", "FLORGES", "GOUPELIN",
-                "CHEVROUM", "MONORPALE", "DIMOCLES",
-                "EXAGIDE", "VENALGUE", "KRAVARECH", "SUCROQUIN", "DEDENNE",
-                "COCOTINE", "DRAGMARA", "XERNEAS",
-                "YVELTAL", "ZYGARDE", "DIANCIE", "HOOPA", "VOLCANION"
+                ["GRENOUSSE", "NYMPHALI", "XERNEAS", "YVELTAL"],
+                ["FEUNNEC", "MARISSON", "EXAGIDE", "ZYGARDE", "HOOPA"],
+                ["GOUPELIN", "DEDENNE", "MONORPALE", "DIMOCLES", "AMAGARA", "DRAGMARA", "DIANCIE", "VOLCANION"],
+                ["SAPEREAU", "PEREGRAIN", "GALVARAN", "FLORGES", "CHEVROUM", "VENALGUE", "KRAVARECH", "SUCROQUIN", "COCOTINE"],
+                []
             ]
         case .sept:
             return [
-                "BRINDIBOU", "FLAMIAOU", "OTAQUIN", "PICASSAUT", "PLUMELINE",
-                "ROCABOT", "LOUGAROC", "SOVKIPOU", "BACABOUH", "MIMANTIS",
-                "SPODODO", "LAMPIGNON", "CROQUINE", "CANDINE", "SUCREINE",
-                "BOMBYDOU", "SILVALLIE", "MIMIQUI",
-                "DODOALA", "BOUMATA", "METENO", "KATAGAMI", "NECROZMA",
-                "LUNALA", "SOLGALEO", "MARSHADOW", "ZERAORA", "MELTAN",
-                "MELMETAL"
+                ["BRINDIBOU", "FLAMIAOU", "OTAQUIN", "MIMIQUI", "SOLGALEO", "LUNALA"],
+                ["ROCABOT", "LOUGAROC", "NECROZMA", "ZERAORA", "MELTAN", "MELMETAL", "MARSHADOW"],
+                ["PICASSAUT", "PLUMELINE", "SILVALLIE", "DODOALA", "BOUMATA", "METENO", "KATAGAMI"],
+                ["SOVKIPOU", "BACABOUH", "MIMANTIS", "SPODODO", "LAMPIGNON", "CROQUINE", "CANDINE", "SUCREINE", "BOMBYDOU"],
+                []
             ]
         case .huit:
             return [
-                "OUISTEMPO", "FLAMBINO", "LARMELEON", "MINISANGE",
-                "MOUMOUTON", "KHELOCROK", "TORGAMORD", "VOLTOUTOU", "FULGUDOG",
-                "BLANCOTON", "CHARIBARI", "DURALUGON", "FANTYRM", "POULPAF",
-                "KRAKOS", "WUSHOURS", "SHIFOURS", "ZACIAN", "ZAMAZENTA",
-                "ETERNATOS", "CALYREX", "REGIELEKI", "REGIDRAGO", "BLIZZEVAL",
-                "AMOVENUS", "SYLVEROY"
+                ["FLAMBINO", "ZACIAN", "ZAMAZENTA", "ETERNATOS"],
+                ["OUISTEMPO", "LARMELEON", "MOUMOUTON", "DURALUGON", "WUSHOURS", "SHIFOURS", "SYLVEROY"],
+                ["MINISANGE", "VOLTOUTOU", "FULGUDOG", "FANTYRM", "REGIELEKI", "REGIDRAGO", "AMOVENUS"],
+                ["KHELOCROK", "TORGAMORD", "BLANCOTON", "CHARIBARI", "POULPAF", "KRAKOS", "BLIZZEVAL"],
+                []
             ]
         case .neuf:
             return [
-                "POUSSACHA", "MATOUGEON", "CROCOGRIL", "COIFFETON", "GOURMELET",
-                "OLIVINI", "PATACHIOT", "BALBALEZE",
-                "COMPAGNOL", "FAMIGNOL", "ZAPETREL", "FULGULAIR", "GRONDOGUE",
-                "DOGRINO", "AMPIBIDOU", "SCOVILAIN",
-                "BELLIBOLT", "TINKATON", "CERULEDGE", "PALAFIN", "CETITAN",
-                "KORAIDON", "MIRAIDON", "GHOLDENGO", "OGERPON", "TERAPAGOS",
-                "ARBOLIVA", "LOKIX"
+                ["POUSSACHA", "KORAIDON", "MIRAIDON", "OGERPON"],
+                ["MATOUGEON", "CROCOGRIL", "COIFFETON", "AMPIBIDOU", "FORGELINA", "MALVALAME", "SUPERDOFIN", "GROMAGO"],
+                ["GOURMELET", "OLIVINI", "PATACHIOT", "COMPAGNOL", "FAMIGNOL", "ZAPETREL", "FULGULAIRO", "GRONDOGUE", "DOGRINO", "SCOVILAIN", "BALBALEZE", "ARBOLIVA", "TERAPAGOS"],
+                [],
+                []
             ]
         }
+    }
+
+    /// Liste aplatie utilisée par le moteur de jeu.
+    var mots: [String] {
+        motsParNiveau.flatMap { $0 }
     }
 
     func motAleatoire(niveau: NiveauJeu, sauf: String? = nil) -> String {
