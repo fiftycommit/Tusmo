@@ -1,0 +1,101 @@
+name: Tusmo CI/CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: tusmo-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  web-tests:
+    name: Tests web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Tester le backend et la progression
+        run: npm test
+
+      - name: Vérifier la syntaxe JavaScript
+        run: |
+          node --check public/app.mjs
+          node --check public/game.mjs
+
+      - name: Régénérer les banques depuis Swift
+        run: npm run banks
+
+  ios-build:
+    name: Build iOS
+    runs-on: macos-latest
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Construire la cible iOS
+        run: >-
+          xcodebuild
+          -project Tusmo.xcodeproj
+          -target Tusmo
+          -sdk iphonesimulator
+          -configuration Debug
+          build
+          CODE_SIGNING_ALLOWED=NO
+
+  deploy:
+    name: Déployer en production
+    needs:
+      - web-tests
+      - ios-build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Configurer SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          test -n "$DEPLOY_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          chmod 644 "$HOME/.ssh/known_hosts"
+
+      - name: Mettre à jour et vérifier le serveur
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && git pull --ff-only origin main && cd web && docker compose --env-file .env up -d --build --remove-orphans && curl --fail --silent --show-error --max-time 20 http://127.0.0.1/healthz"

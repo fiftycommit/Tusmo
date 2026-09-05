@@ -117,3 +117,19 @@ Le déploiement serveur utilise `web/compose.yaml` : PostgreSQL reste privé,
 l’application écoute sur le réseau Docker et Nginx expose le port 80. Le
 fichier `web/.env` ne doit jamais être commité. HTTPS et `COOKIE_SECURE=true`
 seront activés dès qu’un domaine sera associé au serveur.
+
+## CI/CD
+
+Chaque push vers `main` lance automatiquement :
+
+1. les tests et les vérifications JavaScript de la version web ;
+2. la génération des banques depuis les sources Swift ;
+3. un build iOS sans signature ;
+4. le déploiement sur le serveur uniquement si les étapes précédentes
+   réussissent.
+
+Le déploiement se connecte en SSH, met à jour le dépôt avec
+`git pull --ff-only`, reconstruit Docker Compose, puis vérifie `/healthz`.
+Les secrets GitHub requis pour l’environnement `production` sont
+`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY` et
+`DEPLOY_KNOWN_HOSTS`.
