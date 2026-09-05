@@ -156,6 +156,7 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     var nom: String
     var niveauxParTheme: [String: NiveauJeu]
     var experiencesParTheme: [String: Int]
+    var seriesRapidesParTheme: [String: Int]
     var partiesJouees: Int
     var victoires: Int
     var scoreTotal: Int
@@ -170,6 +171,7 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         self.nom = nom
         self.niveauxParTheme = [:]
         self.experiencesParTheme = [:]
+        self.seriesRapidesParTheme = [:]
         self.partiesJouees = 0
         self.victoires = 0
         self.scoreTotal = 0
@@ -185,6 +187,7 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         case nom
         case niveauxParTheme
         case experiencesParTheme
+        case seriesRapidesParTheme
         case partiesJouees
         case victoires
         case scoreTotal
@@ -210,6 +213,10 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
             [String: Int].self,
             forKey: .experiencesParTheme
         ) ?? [:]
+        seriesRapidesParTheme = try container.decodeIfPresent(
+            [String: Int].self,
+            forKey: .seriesRapidesParTheme
+        ) ?? [:]
         partiesJouees = try container.decode(Int.self, forKey: .partiesJouees)
         victoires = try container.decode(Int.self, forKey: .victoires)
         scoreTotal = try container.decode(Int.self, forKey: .scoreTotal)
@@ -229,6 +236,7 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         try container.encode(nom, forKey: .nom)
         try container.encode(niveauxParTheme, forKey: .niveauxParTheme)
         try container.encode(experiencesParTheme, forKey: .experiencesParTheme)
+        try container.encode(seriesRapidesParTheme, forKey: .seriesRapidesParTheme)
         try container.encode(partiesJouees, forKey: .partiesJouees)
         try container.encode(victoires, forKey: .victoires)
         try container.encode(scoreTotal, forKey: .scoreTotal)
@@ -281,7 +289,14 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     }
 
     /// Enregistre une victoire et ne fait progresser que le thème joué.
-    mutating func enregistrerVictoire(score: Int, cle: String) {
+    /// Les victoires rapides rapportent de plus en plus d'expérience tant
+    /// que la série reste active.
+    mutating func enregistrerVictoire(
+        score: Int,
+        cle: String,
+        essais: Int,
+        maxEssais: Int
+    ) {
         partiesJouees += 1
         victoires += 1
         scoreTotal += score
@@ -289,22 +304,53 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
 
         let niveauTheme = niveauPourTheme(cle: cle)
         guard !niveauTheme.estMaximum else {
+            seriesRapidesParTheme[cle] = 0
             return
         }
 
-        let nouvelleExperience = experiencePourTheme(cle: cle) + 1
-        if nouvelleExperience >= niveauTheme.experienceNecessaire,
-           let niveauSuivant = NiveauJeu(rawValue: niveauTheme.rawValue + 1) {
-            niveauxParTheme[cle] = niveauSuivant
-            experiencesParTheme[cle] = 0
-        } else {
-            niveauxParTheme[cle] = niveauTheme
-            experiencesParTheme[cle] = nouvelleExperience
+        let seuilRapide = max(1, maxEssais / 2)
+        let victoireRapide = essais <= seuilRapide
+        let serieRapide = seriesRapidesParTheme[cle] ?? 0
+        let gainExperience = victoireRapide
+            ? min(4, 2 + serieRapide)
+            : 1
+
+        seriesRapidesParTheme[cle] = victoireRapide
+            ? min(3, serieRapide + 1)
+            : 0
+
+        var niveau = niveauTheme
+        var experience = experiencePourTheme(cle: cle)
+        var experienceRestante = gainExperience
+
+        while experienceRestante > 0, !niveau.estMaximum {
+            let experienceNecessaire = niveau.experienceNecessaire
+            let total = experience + experienceRestante
+            if total >= experienceNecessaire,
+               let niveauSuivant = NiveauJeu(rawValue: niveau.rawValue + 1) {
+                niveau = niveauSuivant
+                experience = 0
+                experienceRestante = total - experienceNecessaire
+            } else {
+                experience = total
+                experienceRestante = 0
+            }
         }
+
+        niveauxParTheme[cle] = niveau
+        experiencesParTheme[cle] = experience
     }
 
-    mutating func enregistrerDefaite() {
+    /// Une défaite rend immédiatement le prochain mot de ce thème plus
+    /// accessible. Le niveau ne peut pas descendre sous Débutant.
+    mutating func enregistrerDefaite(cle: String) {
         partiesJouees += 1
+
+        let niveauTheme = niveauPourTheme(cle: cle)
+        let niveauPrecedent = NiveauJeu(rawValue: niveauTheme.rawValue - 1) ?? .debutant
+        niveauxParTheme[cle] = niveauPrecedent
+        experiencesParTheme[cle] = 0
+        seriesRapidesParTheme[cle] = 0
     }
 
     mutating func enregistrerSurvie(score: Int) {
@@ -436,15 +482,25 @@ final class GestionnaireProfils: ObservableObject {
         sauvegarder()
     }
 
-    func enregistrerVictoire(score: Int, cle: String) {
+    func enregistrerVictoire(
+        score: Int,
+        cle: String,
+        essais: Int,
+        maxEssais: Int
+    ) {
         guard let index = indexProfilActif else { return }
-        profils[index].enregistrerVictoire(score: score, cle: cle)
+        profils[index].enregistrerVictoire(
+            score: score,
+            cle: cle,
+            essais: essais,
+            maxEssais: maxEssais
+        )
         sauvegarder()
     }
 
-    func enregistrerDefaite() {
+    func enregistrerDefaite(cle: String) {
         guard let index = indexProfilActif else { return }
-        profils[index].enregistrerDefaite()
+        profils[index].enregistrerDefaite(cle: cle)
         sauvegarder()
     }
 

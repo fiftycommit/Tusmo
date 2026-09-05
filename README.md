@@ -47,6 +47,9 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
   qui n'ont pas encore été devinés ;
 - progresser automatiquement du niveau Débutant au niveau Maître, séparément
   pour chaque thème ;
+- adapter cette progression à la partie : une victoire rapide accélère les
+  gains d'expérience, tandis qu'une défaite baisse immédiatement le niveau du
+  thème concerné ;
 - créer plusieurs profils, chacun avec sa propre progression et ses records ;
 - choisir le thème Pokémon puis une génération de la I à la IX ;
 - jouer un tournoi de cinq manches et conserver le score final ;

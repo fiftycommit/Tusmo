@@ -1158,6 +1158,12 @@ struct JeuView: View {
                 Text("En risque : \(scoreSurvie) points")
                     .font(.title3.weight(.semibold))
                     .foregroundColor(.orange)
+                if let adaptationVictoireTexte = adaptationVictoireTexte {
+                    Text(adaptationVictoireTexte)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.green.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                }
                 Text("Tu encaisses maintenant, ou tu tentes le multiplicateur suivant.")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.65))
@@ -1199,6 +1205,11 @@ struct JeuView: View {
                 Text("+\(dernierScore) points · total \(scoreTournoi)")
                     .font(.title3.weight(.semibold))
                     .foregroundColor(.yellow)
+                if let adaptationVictoireTexte = adaptationVictoireTexte {
+                    Text(adaptationVictoireTexte)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.green.opacity(0.9))
+                }
                 Button {
                     continuerTournoi()
                 } label: {
@@ -1223,6 +1234,11 @@ struct JeuView: View {
                 Text("Trouvé en \(essais) essai\(essais > 1 ? "s" : "") !")
                     .font(.title3)
                     .foregroundColor(.white.opacity(0.7))
+                if let adaptationVictoireTexte = adaptationVictoireTexte {
+                    Text(adaptationVictoireTexte)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.green.opacity(0.9))
+                }
                 Text("Score : \(dernierScore)")
                     .font(.headline)
                     .foregroundColor(.yellow)
@@ -1245,6 +1261,12 @@ struct JeuView: View {
             Text("Mot trouvé en \(essais) essai\(essais > 1 ? "s" : "")")
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.65))
+            if let adaptationVictoireTexte = adaptationVictoireTexte {
+                Text(adaptationVictoireTexte)
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.green.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -1338,6 +1360,12 @@ struct JeuView: View {
             }
 
             motSolution(solution)
+            if mode != .duo, progressionCle != nil {
+                Text("Le niveau de ce thème baisse pour le prochain mot.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.orange.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
             boutonRejouer
         }
     }
@@ -1373,6 +1401,12 @@ struct JeuView: View {
                 .font(.subheadline)
                 .foregroundColor(.white.opacity(0.5))
             motSolution(solution)
+            if progressionCle != nil {
+                Text("Le niveau de ce thème baisse pour le prochain mot.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.orange.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
             boutonRejouer
         }
     }
@@ -1444,6 +1478,14 @@ struct JeuView: View {
 
     private var maxEssais: Int {
         mode == .duo ? 6 : niveauActuel.nombreEssais
+    }
+
+    private var adaptationVictoireTexte: String? {
+        guard mode != .duo, progressionCle != nil else { return nil }
+        let seuilRapide = max(1, maxEssais / 2)
+        return essai <= seuilRapide
+            ? "⚡ Victoire rapide · progression accélérée"
+            : "Progression normale pour ce thème"
     }
 
     private var sourceTitre: String {
@@ -1689,7 +1731,12 @@ struct JeuView: View {
         if mode != .duo {
             if let progressionCle {
                 gestionnaireProfils.enregistrerMotTrouve(motSecret, cle: progressionCle)
-                gestionnaireProfils.enregistrerVictoire(score: dernierScore, cle: progressionCle)
+                gestionnaireProfils.enregistrerVictoire(
+                    score: dernierScore,
+                    cle: progressionCle,
+                    essais: essai,
+                    maxEssais: maxEssais
+                )
             }
         }
 
@@ -1717,13 +1764,19 @@ struct JeuView: View {
         if mode == .survie {
             let pointsPerdus = scoreSurvie
             scoreSurvie = 0
-            gestionnaireProfils.enregistrerDefaite()
+            if let progressionCle {
+                gestionnaireProfils.enregistrerDefaite(cle: progressionCle)
+                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+            }
             etat = .surviePerdue(mot: motSecret, score: pointsPerdus)
             return
         }
 
         if mode != .duo {
-            gestionnaireProfils.enregistrerDefaite()
+            if let progressionCle {
+                gestionnaireProfils.enregistrerDefaite(cle: progressionCle)
+                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+            }
         }
 
         if mode == .tournoi {
