@@ -1,7 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { evaluate, finish, profile, select } from '../public/game.mjs';
+import {
+  evaluate,
+  finish,
+  maxUnlockedLevel,
+  profile,
+  select,
+} from '../public/game.mjs';
 
 test('évalue correctement les lettres en double', () => {
   assert.deepEqual(evaluate('PAPAYE', 'PAPAYE'), ['correct', 'correct', 'correct', 'correct', 'correct', 'correct']);
@@ -27,8 +33,18 @@ test('une victoire rapide augmente le niveau du thème sans dépasser le maximum
   const player = profile('Test');
   player.niveauxParTheme.test = 1;
   player.seriesRapidesParTheme.test = 1;
-  const result = finish(player, 'test', 'ALPHA', true, 1, 6, 1);
+  const result = finish(player, 'test', 'ALPHA', true, 1, 6, 1, 0.10);
   assert.equal(result, 190);
   assert.equal(player.motsTrouvesParTheme.test[0], 'ALPHA');
   assert.equal(player.niveauxParTheme.test, 2);
+});
+
+test('la performance ne débloque pas un niveau avant la découverte requise', () => {
+  const player = profile('Test');
+  player.seriesRapidesParTheme.test = 1;
+  finish(player, 'test', 'ALPHA', true, 1, 6, 1, 0.01);
+  assert.equal(player.niveauxParTheme.test, 1);
+  assert.equal(player.experiencesParTheme.test, 2);
+  assert.equal(maxUnlockedLevel(0.64), 4);
+  assert.equal(maxUnlockedLevel(0.65), 5);
 });

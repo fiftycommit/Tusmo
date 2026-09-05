@@ -464,23 +464,33 @@ struct Theme: Identifiable, Hashable {
             : nonExclus
         guard !disponibles.isEmpty else { return nil }
 
-        if niveau == .debutant {
+        let progression = mots.isEmpty
+            ? 0
+            : Double(Set(mots).intersection(exclus).count) / Double(Set(mots).count)
+        let niveauMaximum = NiveauJeu.maximumDebloque(
+            pourcentageDecouvert: progression
+        )
+        let niveauSelection = niveau.rawValue <= niveauMaximum.rawValue
+            ? niveau
+            : niveauMaximum
+
+        if niveauSelection == .debutant {
             let premiersDisponibles = disponibles.filter { premiersMots.contains($0) }
             if let mot = premiersDisponibles.randomElement() {
                 return mot
             }
         }
 
-        let motsDuNiveau = disponibles.filter { niveauDuMot($0) == niveau }
+        let motsDuNiveau = disponibles.filter { niveauDuMot($0) == niveauSelection }
         if let mot = motsDuNiveau.randomElement() {
             return mot
         }
 
         let distanceMinimum = disponibles
-            .map { abs(niveauDuMot($0).rawValue - niveau.rawValue) }
+            .map { abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) }
             .min() ?? 0
         let motsLesPlusProches = disponibles.filter {
-            abs(niveauDuMot($0).rawValue - niveau.rawValue) == distanceMinimum
+            abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) == distanceMinimum
         }
         return motsLesPlusProches.randomElement()
     }

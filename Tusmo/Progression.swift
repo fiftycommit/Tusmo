@@ -47,6 +47,31 @@ enum NiveauJeu: Int, CaseIterable, Codable, Hashable, Identifiable {
         }
     }
 
+    /// Part minimale de la banque qui doit être découverte pour débloquer
+    /// ce niveau. La performance accélère l'XP, mais ne peut pas remplacer
+    /// la découverte réelle du thème.
+    var pourcentageMinimumDecouvert: Double {
+        switch self {
+        case .debutant: return 0
+        case .apprenti: return 0.10
+        case .confirme: return 0.25
+        case .expert: return 0.45
+        case .maitre: return 0.65
+        }
+    }
+
+    var niveauSuivant: NiveauJeu? {
+        NiveauJeu(rawValue: rawValue + 1)
+    }
+
+    /// Niveau maximal autorisé par la découverte actuelle du thème.
+    static func maximumDebloque(pourcentageDecouvert: Double) -> NiveauJeu {
+        let progression = min(max(pourcentageDecouvert, 0), 1)
+        return allCases.last {
+            progression + 0.000_001 >= $0.pourcentageMinimumDecouvert
+        } ?? .debutant
+    }
+
     /// Convertit un poids de notoriété en niveau de jeu.
     ///
     /// 100 représente un terme immédiatement identifiable, tandis que 1
@@ -73,7 +98,13 @@ enum NiveauJeu: Int, CaseIterable, Codable, Hashable, Identifiable {
 
     /// Nombre de victoires nécessaires pour débloquer le niveau suivant.
     var experienceNecessaire: Int {
-        rawValue + 2
+        switch self {
+        case .debutant: return 3
+        case .apprenti: return 6
+        case .confirme: return 10
+        case .expert: return 15
+        case .maitre: return 0
+        }
     }
 
     var estMaximum: Bool {
@@ -267,6 +298,18 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         niveauxParTheme[cle] ?? .debutant
     }
 
+    /// Empêche une ancienne sauvegarde ou une progression trop rapide de
+    /// dépasser le niveau réellement autorisé par la découverte du thème.
+    func niveauPourTheme(cle: String, progression: Double) -> NiveauJeu {
+        let niveauStocke = niveauPourTheme(cle: cle)
+        let niveauAutorise = NiveauJeu.maximumDebloque(
+            pourcentageDecouvert: progression
+        )
+        return niveauStocke.rawValue <= niveauAutorise.rawValue
+            ? niveauStocke
+            : niveauAutorise
+    }
+
     func experiencePourTheme(cle: String) -> Int {
         experiencesParTheme[cle] ?? 0
     }
@@ -295,14 +338,25 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         score: Int,
         cle: String,
         essais: Int,
-        maxEssais: Int
+        maxEssais: Int,
+        progressionTheme: Double
     ) {
         partiesJouees += 1
         victoires += 1
         scoreTotal += score
         meilleurScore = max(meilleurScore, score)
 
-        let niveauTheme = niveauPourTheme(cle: cle)
+        let niveauAutorise = niveauPourTheme(
+            cle: cle,
+            progression: progressionTheme
+        )
+        if niveauPourTheme(cle: cle).rawValue > niveauAutorise.rawValue {
+            niveauxParTheme[cle] = niveauAutorise
+            experiencesParTheme[cle] = 0
+            seriesRapidesParTheme[cle] = 0
+        }
+
+        let niveauTheme = niveauAutorise
         guard !niveauTheme.estMaximum else {
             seriesRapidesParTheme[cle] = 0
             return
@@ -328,9 +382,16 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
             let total = experience + experienceRestante
             if total >= experienceNecessaire,
                let niveauSuivant = NiveauJeu(rawValue: niveau.rawValue + 1) {
-                niveau = niveauSuivant
-                experience = 0
-                experienceRestante = total - experienceNecessaire
+                if progressionTheme + 0.000_001 >= niveauSuivant.pourcentageMinimumDecouvert {
+                    niveau = niveauSuivant
+                    experience = 0
+                    experienceRestante = total - experienceNecessaire
+                } else {
+                    // L'XP reste utile, mais elle est plafonnée juste avant
+                    // le passage pour éviter un saut artificiel plus tard.
+                    experience = max(experienceNecessaire - 1, 0)
+                    experienceRestante = 0
+                }
             } else {
                 experience = total
                 experienceRestante = 0
@@ -397,6 +458,9 @@ final class GestionnaireProfils: ObservableObject {
             profilActifID = profil.id
             sauvegarder()
         }
+
+        recalibrerNiveauxSelonDecouverte()
+        sauvegarder()
     }
 
     var profilActif: ProfilSauvegarde {
@@ -415,6 +479,10 @@ final class GestionnaireProfils: ObservableObject {
 
     func niveauPourTheme(cle: String) -> NiveauJeu {
         profilActif.niveauPourTheme(cle: cle)
+    }
+
+    func niveauPourTheme(cle: String, progression: Double) -> NiveauJeu {
+        profilActif.niveauPourTheme(cle: cle, progression: progression)
     }
 
     func experiencePourTheme(cle: String) -> Int {
@@ -486,14 +554,16 @@ final class GestionnaireProfils: ObservableObject {
         score: Int,
         cle: String,
         essais: Int,
-        maxEssais: Int
+        maxEssais: Int,
+        progressionTheme: Double
     ) {
         guard let index = indexProfilActif else { return }
         profils[index].enregistrerVictoire(
             score: score,
             cle: cle,
             essais: essais,
-            maxEssais: maxEssais
+            maxEssais: maxEssais,
+            progressionTheme: progressionTheme
         )
         sauvegarder()
     }
@@ -518,6 +588,47 @@ final class GestionnaireProfils: ObservableObject {
 
     private var indexProfilActif: Int? {
         profils.firstIndex { $0.id == profilActifID }
+    }
+
+    /// Les anciennes sauvegardes pouvaient contenir un niveau Maître après
+    /// très peu de mots. On les ramène au niveau réellement déblocable dès
+    /// leur chargement, sans supprimer les mots déjà trouvés.
+    private func recalibrerNiveauxSelonDecouverte() {
+        for index in profils.indices {
+            let banques = BanqueDeMots.themes + [BanqueDeMots.melange]
+            for theme in banques where !theme.estPokemon {
+                recalibrer(
+                    profilIndex: index,
+                    cle: theme.cleProgression,
+                    mots: theme.mots
+                )
+            }
+
+            for generation in GenerationPokemon.allCases {
+                recalibrer(
+                    profilIndex: index,
+                    cle: generation.cleProgression,
+                    mots: generation.mots
+                )
+            }
+        }
+    }
+
+    private func recalibrer(
+        profilIndex: Int,
+        cle: String,
+        mots: [String]
+    ) {
+        let progression = profils[profilIndex].progression(cle: cle, mots: mots)
+        let niveauAutorise = NiveauJeu.maximumDebloque(
+            pourcentageDecouvert: progression
+        )
+        let niveauActuel = profils[profilIndex].niveauPourTheme(cle: cle)
+        guard niveauActuel.rawValue > niveauAutorise.rawValue else { return }
+
+        profils[profilIndex].niveauxParTheme[cle] = niveauAutorise
+        profils[profilIndex].experiencesParTheme[cle] = 0
+        profils[profilIndex].seriesRapidesParTheme[cle] = 0
     }
 
     private func sauvegarder() {

@@ -597,7 +597,10 @@ struct ChoixThemeView: View {
         if theme.estPokemon {
             ChoixGenerationPokemonView(theme: theme, mode: mode)
         } else {
-            let niveau = gestionnaireProfils.niveauPourTheme(cle: theme.cleProgression)
+            let niveau = gestionnaireProfils.niveauPourTheme(
+                cle: theme.cleProgression,
+                progression: gestionnaireProfils.progressionTheme(theme)
+            )
             let exclus = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
             if let motSecret = theme.motAleatoireNonTrouve(niveau: niveau, exclus: exclus) {
                 JeuView(
@@ -614,7 +617,10 @@ struct ChoixThemeView: View {
 
     private func carteTheme(_ theme: Theme) -> some View {
         let progression = gestionnaireProfils.progressionTheme(theme)
-        let niveau = gestionnaireProfils.niveauPourTheme(cle: theme.cleProgression)
+        let niveau = gestionnaireProfils.niveauPourTheme(
+            cle: theme.cleProgression,
+            progression: progression
+        )
 
         return VStack(spacing: 8) {
             Text(theme.emoji)
@@ -750,7 +756,10 @@ struct ChoixGenerationPokemonView: View {
 
     @ViewBuilder
     private func jeuPourGeneration(_ generation: GenerationPokemon) -> some View {
-        let niveau = gestionnaireProfils.niveauPourTheme(cle: generation.cleProgression)
+        let niveau = gestionnaireProfils.niveauPourTheme(
+            cle: generation.cleProgression,
+            progression: gestionnaireProfils.progressionGeneration(generation)
+        )
         let exclus = gestionnaireProfils.motsTrouves(cle: generation.cleProgression)
         if let motSecret = generation.motAleatoireNonTrouve(
             niveau: niveau,
@@ -770,7 +779,10 @@ struct ChoixGenerationPokemonView: View {
 
     private func carteGeneration(_ generation: GenerationPokemon) -> some View {
         let progression = gestionnaireProfils.progressionGeneration(generation)
-        let niveau = gestionnaireProfils.niveauPourTheme(cle: generation.cleProgression)
+        let niveau = gestionnaireProfils.niveauPourTheme(
+            cle: generation.cleProgression,
+            progression: progression
+        )
 
         return HStack(spacing: 14) {
             Text("G\(generation.rawValue)")
@@ -1482,6 +1494,17 @@ struct JeuView: View {
 
     private var adaptationVictoireTexte: String? {
         guard mode != .duo, progressionCle != nil else { return nil }
+        if niveauProgression.estMaximum {
+            return "👑 Maître atteint · continue à découvrir le thème"
+        }
+
+        if let progression = sourceProgression,
+           let niveauSuivant = niveauProgression.niveauSuivant,
+           progression + 0.000_001 < niveauSuivant.pourcentageMinimumDecouvert {
+            let seuil = pourcentage(niveauSuivant.pourcentageMinimumDecouvert)
+            return "🔒 " + String(seuil) + " % du thème pour débloquer " + niveauSuivant.nom
+        }
+
         let seuilRapide = max(1, maxEssais / 2)
         return essai <= seuilRapide
             ? "⚡ Victoire rapide · progression accélérée"
@@ -1547,7 +1570,10 @@ struct JeuView: View {
 
     private var niveauProgression: NiveauJeu {
         guard let progressionCle else { return niveauActuel }
-        return gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+        return gestionnaireProfils.niveauPourTheme(
+            cle: progressionCle,
+            progression: sourceProgression ?? 0
+        )
     }
 
     private var nbLettres: Int { motSecret.count }
@@ -1735,7 +1761,8 @@ struct JeuView: View {
                     score: dernierScore,
                     cle: progressionCle,
                     essais: essai,
-                    maxEssais: maxEssais
+                    maxEssais: maxEssais,
+                    progressionTheme: sourceProgression ?? 0
                 )
             }
         }
@@ -1766,7 +1793,10 @@ struct JeuView: View {
             scoreSurvie = 0
             if let progressionCle {
                 gestionnaireProfils.enregistrerDefaite(cle: progressionCle)
-                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+                niveauActuel = gestionnaireProfils.niveauPourTheme(
+                    cle: progressionCle,
+                    progression: sourceProgression ?? 0
+                )
             }
             etat = .surviePerdue(mot: motSecret, score: pointsPerdus)
             return
@@ -1775,7 +1805,10 @@ struct JeuView: View {
         if mode != .duo {
             if let progressionCle {
                 gestionnaireProfils.enregistrerDefaite(cle: progressionCle)
-                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+                niveauActuel = gestionnaireProfils.niveauPourTheme(
+                    cle: progressionCle,
+                    progression: sourceProgression ?? 0
+                )
             }
         }
 
@@ -1805,7 +1838,10 @@ struct JeuView: View {
         guard theme != nil || generationPokemon != nil else { return }
 
         if let progressionCle {
-            niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+            niveauActuel = gestionnaireProfils.niveauPourTheme(
+                cle: progressionCle,
+                progression: sourceProgression ?? 0
+            )
         }
 
         guard let nouveauMot = motAleatoirePourPartie(sauf: motSecret) else {
@@ -1902,7 +1938,10 @@ struct JeuView: View {
     private func resetPartie() {
         if mode != .duo {
             if let progressionCle {
-                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+                niveauActuel = gestionnaireProfils.niveauPourTheme(
+                    cle: progressionCle,
+                    progression: sourceProgression ?? 0
+                )
             } else {
                 niveauActuel = niveauInitial
             }

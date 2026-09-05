@@ -194,9 +194,19 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
             : nonExclus
         guard !disponibles.isEmpty else { return nil }
 
+        let progression = mots.isEmpty
+            ? 0
+            : Double(Set(mots).intersection(exclus).count) / Double(Set(mots).count)
+        let niveauMaximum = NiveauJeu.maximumDebloque(
+            pourcentageDecouvert: progression
+        )
+        let niveauSelection = niveau.rawValue <= niveauMaximum.rawValue
+            ? niveau
+            : niveauMaximum
+
         // Une génération commence par ses mascottes, starters et légendaires
         // les plus connus, quel que soit le nombre de lettres de leur nom.
-        if niveau == .debutant {
+        if niveauSelection == .debutant {
             let premiersDisponibles = disponibles.filter { premiersMots.contains($0) }
             if let mot = premiersDisponibles.randomElement() {
                 return mot
@@ -204,17 +214,17 @@ enum GenerationPokemon: Int, CaseIterable, Hashable, Identifiable {
         }
 
         let compatibles = disponibles.filter {
-            niveauDuMot($0) == niveau
+            niveauDuMot($0) == niveauSelection
         }
         if let mot = compatibles.randomElement() {
             return mot
         }
 
         let distanceMinimum = disponibles
-            .map { abs(niveauDuMot($0).rawValue - niveau.rawValue) }
+            .map { abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) }
             .min() ?? 0
         let choix = disponibles.filter {
-            abs(niveauDuMot($0).rawValue - niveau.rawValue) == distanceMinimum
+            abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) == distanceMinimum
         }
         return choix.randomElement()
     }

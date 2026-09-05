@@ -49,6 +49,10 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
 - adapter cette progression à la partie : une victoire rapide accélère les
   gains d'expérience, tandis qu'une défaite baisse immédiatement le niveau du
   thème concerné ;
+- conditionner aussi le déblocage des niveaux à la découverte du thème :
+  Apprenti à 10 %, Confirmé à 25 %, Expert à 45 % et Maître à 65 % ;
+- augmenter progressivement l'effort nécessaire entre les niveaux : 3, 6,
+  10 puis 15 victoires d'expérience, avec recalibrage des anciennes sauvegardes ;
 - créer plusieurs profils, chacun avec sa propre progression et ses records ;
 - choisir le thème Pokémon puis une génération de la I à la IX ;
 - jouer un tournoi de cinq manches et conserver le score final ;
