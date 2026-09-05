@@ -154,8 +154,8 @@ enum ModeJeu: String, CaseIterable, Codable, Hashable, Identifiable {
 struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     let id: UUID
     var nom: String
-    var niveau: NiveauJeu
-    var experience: Int
+    var niveauxParTheme: [String: NiveauJeu]
+    var experiencesParTheme: [String: Int]
     var partiesJouees: Int
     var victoires: Int
     var scoreTotal: Int
@@ -168,8 +168,8 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     init(id: UUID = UUID(), nom: String) {
         self.id = id
         self.nom = nom
-        self.niveau = .debutant
-        self.experience = 0
+        self.niveauxParTheme = [:]
+        self.experiencesParTheme = [:]
         self.partiesJouees = 0
         self.victoires = 0
         self.scoreTotal = 0
@@ -183,8 +183,8 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case nom
-        case niveau
-        case experience
+        case niveauxParTheme
+        case experiencesParTheme
         case partiesJouees
         case victoires
         case scoreTotal
@@ -195,14 +195,21 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         case motsTrouvesParTheme
     }
 
-    /// Permet de conserver les profils créés avant l'ajout de la progression
-    /// par thème : le nouveau champ est facultatif à la lecture.
+    /// Les profils créés avec l'ancien niveau global restent lisibles. Comme
+    /// leurs victoires n'étaient pas rattachées à un thème, leur progression
+    /// thématique démarre proprement au niveau Débutant.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         nom = try container.decode(String.self, forKey: .nom)
-        niveau = try container.decode(NiveauJeu.self, forKey: .niveau)
-        experience = try container.decode(Int.self, forKey: .experience)
+        niveauxParTheme = try container.decodeIfPresent(
+            [String: NiveauJeu].self,
+            forKey: .niveauxParTheme
+        ) ?? [:]
+        experiencesParTheme = try container.decodeIfPresent(
+            [String: Int].self,
+            forKey: .experiencesParTheme
+        ) ?? [:]
         partiesJouees = try container.decode(Int.self, forKey: .partiesJouees)
         victoires = try container.decode(Int.self, forKey: .victoires)
         scoreTotal = try container.decode(Int.self, forKey: .scoreTotal)
@@ -220,8 +227,8 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(nom, forKey: .nom)
-        try container.encode(niveau, forKey: .niveau)
-        try container.encode(experience, forKey: .experience)
+        try container.encode(niveauxParTheme, forKey: .niveauxParTheme)
+        try container.encode(experiencesParTheme, forKey: .experiencesParTheme)
         try container.encode(partiesJouees, forKey: .partiesJouees)
         try container.encode(victoires, forKey: .victoires)
         try container.encode(scoreTotal, forKey: .scoreTotal)
@@ -230,18 +237,6 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         try container.encode(tournoisJoues, forKey: .tournoisJoues)
         try container.encode(tournoisGagnes, forKey: .tournoisGagnes)
         try container.encode(motsTrouvesParTheme, forKey: .motsTrouvesParTheme)
-    }
-
-    var experienceAffichee: String {
-        if niveau.estMaximum {
-            return "Niveau maximum"
-        }
-        return "\(experience)/\(niveau.experienceNecessaire) victoires"
-    }
-
-    var progressionNiveau: Double {
-        guard !niveau.estMaximum else { return 1 }
-        return min(1, Double(experience) / Double(niveau.experienceNecessaire))
     }
 
     func motsTrouves(cle: String) -> Set<String> {
@@ -258,19 +253,53 @@ struct ProfilSauvegarde: Identifiable, Codable, Equatable {
         return min(1, Double(progressionMots(cle: cle, mots: mots)) / Double(motsUniques.count))
     }
 
-    mutating func enregistrerVictoire(score: Int) {
+    /// Chaque clé de progression possède son propre niveau et sa propre
+    /// expérience. Une nouvelle clé commence toujours au niveau Débutant.
+    func niveauPourTheme(cle: String) -> NiveauJeu {
+        niveauxParTheme[cle] ?? .debutant
+    }
+
+    func experiencePourTheme(cle: String) -> Int {
+        experiencesParTheme[cle] ?? 0
+    }
+
+    func experienceAfficheePourTheme(cle: String) -> String {
+        let niveauTheme = niveauPourTheme(cle: cle)
+        if niveauTheme.estMaximum {
+            return "Niveau maximum"
+        }
+        return "\(experiencePourTheme(cle: cle))/\(niveauTheme.experienceNecessaire) victoires"
+    }
+
+    func progressionNiveauPourTheme(cle: String) -> Double {
+        let niveauTheme = niveauPourTheme(cle: cle)
+        guard !niveauTheme.estMaximum else { return 1 }
+        return min(
+            1,
+            Double(experiencePourTheme(cle: cle)) / Double(niveauTheme.experienceNecessaire)
+        )
+    }
+
+    /// Enregistre une victoire et ne fait progresser que le thème joué.
+    mutating func enregistrerVictoire(score: Int, cle: String) {
         partiesJouees += 1
         victoires += 1
         scoreTotal += score
         meilleurScore = max(meilleurScore, score)
 
-        guard !niveau.estMaximum else { return }
+        let niveauTheme = niveauPourTheme(cle: cle)
+        guard !niveauTheme.estMaximum else {
+            return
+        }
 
-        experience += 1
-        if experience >= niveau.experienceNecessaire,
-           let niveauSuivant = NiveauJeu(rawValue: niveau.rawValue + 1) {
-            niveau = niveauSuivant
-            experience = 0
+        let nouvelleExperience = experiencePourTheme(cle: cle) + 1
+        if nouvelleExperience >= niveauTheme.experienceNecessaire,
+           let niveauSuivant = NiveauJeu(rawValue: niveauTheme.rawValue + 1) {
+            niveauxParTheme[cle] = niveauSuivant
+            experiencesParTheme[cle] = 0
+        } else {
+            niveauxParTheme[cle] = niveauTheme
+            experiencesParTheme[cle] = nouvelleExperience
         }
     }
 
@@ -338,6 +367,22 @@ final class GestionnaireProfils: ObservableObject {
         profilActif.motsTrouves(cle: cle)
     }
 
+    func niveauPourTheme(cle: String) -> NiveauJeu {
+        profilActif.niveauPourTheme(cle: cle)
+    }
+
+    func experiencePourTheme(cle: String) -> Int {
+        profilActif.experiencePourTheme(cle: cle)
+    }
+
+    func experienceAfficheePourTheme(cle: String) -> String {
+        profilActif.experienceAfficheePourTheme(cle: cle)
+    }
+
+    func progressionNiveauPourTheme(cle: String) -> Double {
+        profilActif.progressionNiveauPourTheme(cle: cle)
+    }
+
     func progressionTheme(_ theme: Theme) -> Double {
         if theme.estPokemon {
             let total = GenerationPokemon.totalMots
@@ -391,9 +436,9 @@ final class GestionnaireProfils: ObservableObject {
         sauvegarder()
     }
 
-    func enregistrerVictoire(score: Int) {
+    func enregistrerVictoire(score: Int, cle: String) {
         guard let index = indexProfilActif else { return }
-        profils[index].enregistrerVictoire(score: score)
+        profils[index].enregistrerVictoire(score: score, cle: cle)
         sauvegarder()
     }
 

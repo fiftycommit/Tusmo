@@ -100,7 +100,7 @@ struct MenuView: View {
                     ProfilsView()
                 } label: {
                     HStack(spacing: 12) {
-                        Text(gestionnaireProfils.profilActif.niveau.emoji)
+                        Text("🎯")
                             .font(.title2)
                             .frame(width: 42, height: 42)
                             .background(
@@ -112,7 +112,7 @@ struct MenuView: View {
                             Text(gestionnaireProfils.profilActif.nom)
                                 .font(.headline)
                                 .foregroundColor(.white)
-                            Text("Niveau \(gestionnaireProfils.profilActif.niveau.rawValue) · \(gestionnaireProfils.profilActif.niveau.nom)")
+                            Text("Progression par thème")
                                 .font(.caption)
                                 .foregroundColor(.white.opacity(0.55))
                         }
@@ -305,7 +305,7 @@ struct ProfilsView: View {
                                             Text(profil.nom)
                                                 .font(.headline)
                                                 .foregroundColor(.white)
-                                            Text("\(profil.niveau.emoji) Niveau \(profil.niveau.rawValue) · \(profil.victoires) victoire\(profil.victoires > 1 ? "s" : "")")
+                                            Text("\(profil.victoires) victoire\(profil.victoires > 1 ? "s" : "") · niveaux par thème")
                                                 .font(.caption)
                                                 .foregroundColor(.white.opacity(0.55))
                                         }
@@ -376,17 +376,18 @@ struct ProfilsView: View {
     private func profilDetail(_ profil: ProfilSauvegarde) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Progression")
+                Text("Progression par thème")
                     .font(.headline)
                     .foregroundColor(.white)
                 Spacer()
-                Text(profil.experienceAffichee)
+                Text("\(profil.niveauxParTheme.count) thème\(profil.niveauxParTheme.count > 1 ? "s" : "") commencé\(profil.niveauxParTheme.count > 1 ? "s" : "")")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.yellow)
             }
 
-            ProgressView(value: profil.progressionNiveau)
-                .tint(.red)
+            Text("Chaque thème possède son propre niveau et sa propre expérience.")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.55))
 
             HStack(spacing: 0) {
                 statistique("Parties", valeur: profil.partiesJouees)
@@ -429,12 +430,12 @@ struct ChoixModeView: View {
                 EnteteSecondaire(titre: "Mode solo", actionRetour: { dismiss() })
 
                 HStack(spacing: 10) {
-                    Text(gestionnaireProfils.profilActif.niveau.emoji)
+                    Text("🎯")
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Difficulté automatique · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
+                        Text("Difficulté indépendante par thème")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.white)
-                        Text("Notoriété du terme, pas sa longueur · \(gestionnaireProfils.profilActif.niveau.description)")
+                        Text("Apple peut être Maître, tandis que Simpsons reste Débutant")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -596,7 +597,7 @@ struct ChoixThemeView: View {
         if theme.estPokemon {
             ChoixGenerationPokemonView(theme: theme, mode: mode)
         } else {
-            let niveau = gestionnaireProfils.profilActif.niveau
+            let niveau = gestionnaireProfils.niveauPourTheme(cle: theme.cleProgression)
             let exclus = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
             if let motSecret = theme.motAleatoireNonTrouve(niveau: niveau, exclus: exclus) {
                 JeuView(
@@ -613,6 +614,7 @@ struct ChoixThemeView: View {
 
     private func carteTheme(_ theme: Theme) -> some View {
         let progression = gestionnaireProfils.progressionTheme(theme)
+        let niveau = gestionnaireProfils.niveauPourTheme(cle: theme.cleProgression)
 
         return VStack(spacing: 8) {
             Text(theme.emoji)
@@ -625,6 +627,15 @@ struct ChoixThemeView: View {
                  : "\(theme.mots.count) mots")
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.4))
+            if theme.estPokemon {
+                Text("Niveau indépendant par génération")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.yellow.opacity(0.8))
+            } else {
+                Text("\(niveau.emoji) Niveau \(niveau.rawValue) · \(niveau.nom)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.red.opacity(0.9))
+            }
             ProgressView(value: progression)
                 .tint(theme.estPokemon ? .yellow : .red)
             Text("\(pourcentage(progression)) % découvert")
@@ -661,10 +672,10 @@ struct ChoixGenerationPokemonView: View {
                     Text("⚡️")
                         .font(.title2)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Pokémon · niveau \(gestionnaireProfils.profilActif.niveau.rawValue)")
+                        Text("Pokémon · niveau indépendant par génération")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.white)
-                        Text("Génération choisie · difficulté selon la notoriété")
+                        Text("Chaque génération conserve sa propre progression")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.5))
                     }
@@ -739,7 +750,7 @@ struct ChoixGenerationPokemonView: View {
 
     @ViewBuilder
     private func jeuPourGeneration(_ generation: GenerationPokemon) -> some View {
-        let niveau = gestionnaireProfils.profilActif.niveau
+        let niveau = gestionnaireProfils.niveauPourTheme(cle: generation.cleProgression)
         let exclus = gestionnaireProfils.motsTrouves(cle: generation.cleProgression)
         if let motSecret = generation.motAleatoireNonTrouve(
             niveau: niveau,
@@ -759,6 +770,7 @@ struct ChoixGenerationPokemonView: View {
 
     private func carteGeneration(_ generation: GenerationPokemon) -> some View {
         let progression = gestionnaireProfils.progressionGeneration(generation)
+        let niveau = gestionnaireProfils.niveauPourTheme(cle: generation.cleProgression)
 
         return HStack(spacing: 14) {
             Text("G\(generation.rawValue)")
@@ -777,6 +789,9 @@ struct ChoixGenerationPokemonView: View {
                 Text("\(generation.region) · \(generation.mots.count) Pokémon")
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.5))
+                Text("\(niveau.emoji) Niveau \(niveau.rawValue) · \(niveau.nom)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(.yellow.opacity(0.85))
                 ProgressView(value: progression)
                     .tint(.yellow)
                 Text("\(pourcentage(progression)) % découvert")
@@ -1218,7 +1233,8 @@ struct JeuView: View {
     }
 
     private func contenuProgressionVictoire(essais: Int) -> some View {
-        let profil = gestionnaireProfils.profilActif
+        let niveau = niveauProgression
+        let cle = progressionCle ?? ""
 
         return VStack(spacing: 14) {
             Text("📈")
@@ -1232,15 +1248,15 @@ struct JeuView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("\(profil.niveau.emoji) Niveau \(profil.niveau.rawValue) · \(profil.niveau.nom)")
+                    Text("\(niveau.emoji) Niveau \(niveau.rawValue) · \(niveau.nom)")
                         .font(.headline)
                         .foregroundColor(.white)
                     Spacer()
-                    Text(profil.experienceAffichee)
+                    Text(gestionnaireProfils.experienceAfficheePourTheme(cle: cle))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white.opacity(0.6))
                 }
-                ProgressView(value: profil.progressionNiveau)
+                ProgressView(value: gestionnaireProfils.progressionNiveauPourTheme(cle: cle))
                     .tint(.red)
             }
             .padding(14)
@@ -1487,6 +1503,11 @@ struct JeuView: View {
         return false
     }
 
+    private var niveauProgression: NiveauJeu {
+        guard let progressionCle else { return niveauActuel }
+        return gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+    }
+
     private var nbLettres: Int { motSecret.count }
 
     /// Difficulté éditoriale du mot actuel, indépendante du niveau du profil.
@@ -1668,8 +1689,8 @@ struct JeuView: View {
         if mode != .duo {
             if let progressionCle {
                 gestionnaireProfils.enregistrerMotTrouve(motSecret, cle: progressionCle)
+                gestionnaireProfils.enregistrerVictoire(score: dernierScore, cle: progressionCle)
             }
-            gestionnaireProfils.enregistrerVictoire(score: dernierScore)
         }
 
         switch mode {
@@ -1729,6 +1750,10 @@ struct JeuView: View {
 
     private func commencerMotSuivant() {
         guard theme != nil || generationPokemon != nil else { return }
+
+        if let progressionCle {
+            niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+        }
 
         guard let nouveauMot = motAleatoirePourPartie(sauf: motSecret) else {
             terminerQuandThemeEstComplet()
@@ -1823,7 +1848,11 @@ struct JeuView: View {
 
     private func resetPartie() {
         if mode != .duo {
-            niveauActuel = gestionnaireProfils.profilActif.niveau
+            if let progressionCle {
+                niveauActuel = gestionnaireProfils.niveauPourTheme(cle: progressionCle)
+            } else {
+                niveauActuel = niveauInitial
+            }
         } else {
             niveauActuel = niveauInitial
         }
