@@ -98,4 +98,4 @@ jobs:
             -o BatchMode=yes \
             -o ConnectTimeout=30 \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && git pull --ff-only origin main && cd web && docker compose --env-file .env up -d --build --remove-orphans && curl --fail --silent --show-error --max-time 20 http://127.0.0.1/healthz"
+            "cd '$DEPLOY_PATH' && git pull --ff-only origin main && cd web && docker compose --env-file .env up -d --build --remove-orphans && for attempt in \$(seq 1 15); do curl --fail --silent --show-error --max-time 20 http://127.0.0.1/healthz && exit 0; sleep 2; done; echo 'Healthcheck indisponible après le redémarrage' >&2; exit 1"
