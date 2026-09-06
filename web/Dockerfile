@@ -9,6 +9,7 @@ RUN npm ci --omit=dev
 WORKDIR /app
 COPY Tusmo/Mots.swift /app/Tusmo/Mots.swift
 COPY Tusmo/Pokemon.swift /app/Tusmo/Pokemon.swift
+COPY Tusmo/SousThemes.swift /app/Tusmo/SousThemes.swift
 COPY web /app/web
 RUN node /app/web/export-banks.mjs
 RUN chown -R node:node /app

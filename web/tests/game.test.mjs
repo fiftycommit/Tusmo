@@ -29,6 +29,39 @@ test('la sélection respecte la progression et exclut les mots trouvés', () => 
   assert.ok(['BETA', 'GAMMA'].includes(picked.word));
 });
 
+test('la sélection applique le sous-thème avant la difficulté et garde le niveau du thème', () => {
+  const bank = {
+    id: 'pays',
+    groups: [
+      ['FRANCE'],
+      ['BURUNDI'],
+      ['JAPON'],
+    ],
+    tags: {
+      FRANCE: ['europe'],
+      BURUNDI: ['afrique'],
+      JAPON: ['asie'],
+    },
+  };
+  const player = profile('Test');
+  player.niveauxParTheme.pays = 2;
+  const picked = select(bank, player, 'afrique');
+  assert.equal(picked.word, 'BURUNDI');
+  assert.equal(picked.level, 2);
+});
+
+test('un sous-thème terminé ne déborde pas sur les autres catégories', () => {
+  const bank = {
+    id: 'pays',
+    groups: [['FRANCE'], ['BURUNDI']],
+    tags: { FRANCE: ['europe'], BURUNDI: ['afrique'] },
+  };
+  const player = profile('Test');
+  player.motsTrouvesParTheme.pays = ['BURUNDI'];
+  assert.equal(select(bank, player, 'afrique'), null);
+  assert.equal(select(bank, player, 'europe').word, 'FRANCE');
+});
+
 test('une victoire rapide augmente le niveau du thème sans dépasser le maximum', () => {
   const player = profile('Test');
   player.niveauxParTheme.test = 1;

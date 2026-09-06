@@ -70,7 +70,7 @@ export function evaluate(word, guess) {
   return result;
 }
 
-export function select(bank, player) {
+export function select(bank, player, filterId = '__all__') {
   const found = new Set(player.motsTrouvesParTheme[bank.id] || []);
   const storedLevel = player.niveauxParTheme[bank.id] || 1;
   const level = effectiveLevel(bank, player);
@@ -80,8 +80,13 @@ export function select(bank, player) {
     player.seriesRapidesParTheme[bank.id] = 0;
   }
 
+  const filteredWords = filterId === '__all__'
+    ? null
+    : new Set(Object.entries(bank.tags || {})
+      .filter(([, tags]) => tags.includes(filterId))
+      .map(([word]) => word));
   const candidates = bank.groups.flatMap((group, index) => group
-    .filter((word) => !found.has(word))
+    .filter((word) => !found.has(word) && (!filteredWords || filteredWords.has(word)))
     .map((word) => ({ word, level: index + 1 })));
   if (!candidates.length) return null;
 

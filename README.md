@@ -55,6 +55,10 @@ J'ai aussi fait une version en Python, jouable dans le terminal, et une autre en
   10 puis 15 victoires d'expérience, avec recalibrage des anciennes sauvegardes ;
 - créer plusieurs profils, chacun avec sa propre progression et ses records ;
 - choisir le thème Pokémon puis une génération de la I à la IX ;
+- filtrer les thèmes Pays, Villes, École, Sport, Musique, Nourriture, Animaux,
+  Voyage, Cinéma, Techno, Nature, Objets maison et Apps / Internet par
+  sous-thème, avec une option Aléatoire ; le dernier filtre choisi est mémorisé
+  comme préférence d'interface, sans modifier la progression ;
 - jouer un tournoi de cinq manches et conserver le score final ;
 - jouer en mode « Le plus loin possible », en choisissant entre encaisser ses
   points ou continuer avec un multiplicateur plus élevé — une défaite fait
@@ -92,6 +96,11 @@ d'un mot adapté au niveau du profil actif. Chaque thème possède sa propre
 progression : une banque peut avoir des niveaux Maître courts ou vides, et
 chaque terme reçoit un poids de notoriété indépendant de sa longueur.
 
+`Tusmo/SousThemes.swift` contient la taxonomie de filtrage, indépendante des
+groupes de difficulté. Un mot peut appartenir à plusieurs sous-thèmes ; le
+moteur filtre d'abord la banque, puis applique les mots déjà trouvés et le
+niveau avec un fallback vers les niveaux voisins.
+
 `Tusmo/Pokemon.swift` contient les banques de Pokémon des générations I à IX
 et leur tirage par niveau.
 
@@ -101,6 +110,8 @@ et leur tirage par niveau.
 
 Une version web jouable se trouve dans `web/`. Elle reprend les banques Swift,
 les profils, la progression par thème, le tournoi, la survie et le duo local.
+Les sous-thèmes sont exportés depuis `Tusmo/SousThemes.swift` vers les banques
+web ; les pays et les villes conservent leurs filtres dynamiques.
 Les comptes email permettent de synchroniser les profils entre navigateurs ;
 la sauvegarde est versionnée pour détecter les modifications concurrentes.
 

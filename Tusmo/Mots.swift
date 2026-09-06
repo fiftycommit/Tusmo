@@ -372,20 +372,33 @@ fileprivate enum BanquesCalibrees {
 }
 
 struct Theme: Identifiable, Hashable {
-    let id = UUID()
+    let id: String
     let nom: String
     let emoji: String
     let mots: [String]
     let poidsParMot: [String: Int]
+    let sousThemes: [SousTheme]
+    private let sousThemeIDsParMot: [String: Set<String>]
 
     init(
+        id: String? = nil,
         nom: String,
         emoji: String,
         mots: [String],
         poidsParMot: [String: Int] = [:]
     ) {
+        self.id = id ?? "theme.\(nom)"
         self.nom = nom
         self.emoji = emoji
+
+        let classifications = TaxonomieThemes.classificationsPour(nom)
+        self.sousThemes = TaxonomieThemes.sousThemesPour(
+            nom: nom,
+            classifications: classifications
+        )
+        self.sousThemeIDsParMot = classifications.reduce(into: [:]) { resultat, entree in
+            resultat[entree.key.uppercased()] = entree.value
+        }
 
         var surcharges = BanquesCalibrees.poidsParTheme(nom)
         for (mot, poids) in poidsParMot {
@@ -426,6 +439,38 @@ struct Theme: Identifiable, Hashable {
         NiveauJeu.depuisPoids(poidsDuMot(mot))
     }
 
+    var possedeSousThemes: Bool {
+        !sousThemes.isEmpty
+    }
+
+    func sousTheme(_ identifiant: String) -> SousTheme? {
+        sousThemes.first { $0.id == identifiant }
+    }
+
+    func libellePour(_ filtre: FiltreSousTheme) -> String {
+        switch filtre {
+        case .aleatoire:
+            switch nom {
+            case "Pays": return "Tous les continents"
+            case "Villes": return "Toutes les villes"
+            default: return "Aléatoire"
+            }
+        case .sousTheme(let identifiant):
+            return sousTheme(identifiant)?.nom ?? "Aléatoire"
+        }
+    }
+
+    /// Retourne la banque complète ou uniquement les mots associés au filtre.
+    /// Les mots qui possèdent plusieurs tags ne sont renvoyés qu'une seule fois.
+    func motsPour(_ filtre: FiltreSousTheme) -> [String] {
+        switch filtre {
+        case .aleatoire:
+            return mots
+        case .sousTheme(let identifiant):
+            return mots.filter { sousThemeIDsParMot[$0.uppercased()]?.contains(identifiant) == true }
+        }
+    }
+
     var repartitionDifficulte: [NiveauJeu: Int] {
         mots.reduce(into: [:]) { resultats, mot in
             let niveau = niveauDuMot(mot)
@@ -456,12 +501,13 @@ struct Theme: Identifiable, Hashable {
     func motAleatoireNonTrouve(
         niveau: NiveauJeu,
         sauf: String? = nil,
-        exclus: Set<String>
+        exclus: Set<String>,
+        filtre: FiltreSousTheme = .aleatoire
     ) -> String? {
-        let nonExclus = Array(Set(mots.filter { !exclus.contains($0) }))
-        let disponibles = nonExclus.count > 1
-            ? nonExclus.filter { $0 != sauf }
-            : nonExclus
+        let motsFiltres = motsPour(filtre)
+        let nonExclus = Array(Set(motsFiltres.filter { !exclus.contains($0) }))
+        let sansMotPrecedent = sauf.map { mot in nonExclus.filter { $0 != mot } } ?? nonExclus
+        let disponibles = sansMotPrecedent.isEmpty ? nonExclus : sansMotPrecedent
         guard !disponibles.isEmpty else { return nil }
 
         let progression = mots.isEmpty
@@ -481,18 +527,26 @@ struct Theme: Identifiable, Hashable {
             }
         }
 
-        let motsDuNiveau = disponibles.filter { niveauDuMot($0) == niveauSelection }
-        if let mot = motsDuNiveau.randomElement() {
-            return mot
+        // On reste d'abord au niveau demandé, puis à +/-1, +/-2, etc. Le
+        // filtre ne peut jamais faire sortir la sélection de sa catégorie.
+        let niveauxProches = (0...NiveauJeu.allCases.count)
+            .flatMap { distance -> [NiveauJeu] in
+                if distance == 0 {
+                    return [niveauSelection]
+                }
+                let inferieur = NiveauJeu(rawValue: niveauSelection.rawValue - distance)
+                let superieur = NiveauJeu(rawValue: niveauSelection.rawValue + distance)
+                return [inferieur, superieur].compactMap { $0 }
+            }
+
+        for niveauCandidat in niveauxProches {
+            let motsDuNiveau = disponibles.filter { niveauDuMot($0) == niveauCandidat }
+            if let mot = motsDuNiveau.randomElement() {
+                return mot
+            }
         }
 
-        let distanceMinimum = disponibles
-            .map { abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) }
-            .min() ?? 0
-        let motsLesPlusProches = disponibles.filter {
-            abs(niveauDuMot($0).rawValue - niveauSelection.rawValue) == distanceMinimum
-        }
-        return motsLesPlusProches.randomElement()
+        return disponibles.randomElement()
     }
 }
 

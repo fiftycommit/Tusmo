@@ -65,12 +65,14 @@ enum EtatJeu {
 
 struct ContentView: View {
     @StateObject private var gestionnaireProfils = GestionnaireProfils()
+    @StateObject private var selectionsSousThemes = SelectionSousThemes()
 
     var body: some View {
         NavigationStack {
             MenuView()
         }
         .environmentObject(gestionnaireProfils)
+        .environmentObject(selectionsSousThemes)
     }
 }
 
@@ -596,22 +598,10 @@ struct ChoixThemeView: View {
     private func destinationPourTheme(_ theme: Theme) -> some View {
         if theme.estPokemon {
             ChoixGenerationPokemonView(theme: theme, mode: mode)
+        } else if theme.possedeSousThemes {
+            ChoixSousThemeView(theme: theme, mode: mode)
         } else {
-            let niveau = gestionnaireProfils.niveauPourTheme(
-                cle: theme.cleProgression,
-                progression: gestionnaireProfils.progressionTheme(theme)
-            )
-            let exclus = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
-            if let motSecret = theme.motAleatoireNonTrouve(niveau: niveau, exclus: exclus) {
-                JeuView(
-                    motSecret: motSecret,
-                    theme: theme,
-                    mode: mode,
-                    niveau: niveau
-                )
-            } else {
-                VueThemeTermine(titre: theme.nom, emoji: theme.emoji)
-            }
+            PartieThemeView(theme: theme, mode: mode, filtre: .aleatoire)
         }
     }
 
@@ -655,6 +645,226 @@ struct ChoixThemeView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.white.opacity(0.06))
         )
+    }
+}
+
+// MARK: - Choix générique du sous-thème
+
+struct ChoixSousThemeView: View {
+    let theme: Theme
+    let mode: ModeJeu
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+    @EnvironmentObject private var selectionsSousThemes: SelectionSousThemes
+    @State private var filtreALancer = FiltreSousTheme.aleatoire
+    @State private var naviguer = false
+
+    private var filtreActuel: FiltreSousTheme {
+        selectionsSousThemes.filtrePour(theme)
+    }
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                EnteteSecondaire(titre: theme.nom, actionRetour: { dismiss() })
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 10) {
+                        Text(theme.emoji)
+                            .font(.title2)
+                        Text("Choisis une catégorie")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Spacer()
+                    }
+                    Text("Le niveau et la progression restent ceux de \(theme.nom).")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.5))
+                    Text("Sélection actuelle : \(theme.libellePour(filtreActuel))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.red.opacity(0.9))
+                }
+                .padding(.horizontal, 20)
+
+                ScrollView {
+                    VStack(spacing: 10) {
+                        carteFiltre(.aleatoire, nom: nomFiltreAleatoire, emoji: "🎲")
+
+                        ForEach(theme.sousThemes) { sousTheme in
+                            carteFiltre(
+                                .sousTheme(sousTheme.id),
+                                nom: sousTheme.nom,
+                                emoji: sousTheme.emoji ?? "🔹"
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 30)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+        .navigationDestination(isPresented: $naviguer) {
+            PartieThemeView(theme: theme, mode: mode, filtre: filtreALancer)
+        }
+    }
+
+    private var nomFiltreAleatoire: String {
+        switch theme.nom {
+        case "Pays": return "Tous les continents"
+        case "Villes": return "Toutes les villes"
+        default: return "Aléatoire"
+        }
+    }
+
+    private func nombreMots(_ filtre: FiltreSousTheme) -> (restants: Int, total: Int) {
+        let mots = theme.motsPour(filtre)
+        let trouves = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
+        return (
+            mots.filter { !trouves.contains($0) }.count,
+            Set(mots).count
+        )
+    }
+
+    @ViewBuilder
+    private func carteFiltre(
+        _ filtre: FiltreSousTheme,
+        nom: String,
+        emoji: String
+    ) -> some View {
+        let compte = nombreMots(filtre)
+        let termine = compte.total > 0 && compte.restants == 0
+
+        Button {
+            guard !termine || filtre == .aleatoire else { return }
+            selectionsSousThemes.choisir(filtre, pour: theme)
+            filtreALancer = filtre
+            naviguer = true
+        } label: {
+            HStack(spacing: 14) {
+                Text(emoji)
+                    .font(.title2)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(Color.white.opacity(0.08)))
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(nom)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text(termine
+                         ? "✅ Sous-thème terminé"
+                         : "\(compte.restants) mot\(compte.restants > 1 ? "s" : "") disponible\(compte.restants > 1 ? "s" : "") · \(compte.total) au total")
+                        .font(.caption)
+                        .foregroundColor(termine ? .green.opacity(0.85) : .white.opacity(0.5))
+                }
+
+                Spacer()
+                if !termine || filtre == .aleatoire {
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.white.opacity(0.3))
+                }
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(filtre == filtreActuel ? Color.red.opacity(0.16) : Color.white.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(filtre == filtreActuel ? Color.red.opacity(0.55) : .clear, lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .opacity(termine && filtre != .aleatoire ? 0.55 : 1)
+        .disabled(termine && filtre != .aleatoire)
+    }
+}
+
+/// Prépare le premier mot d'une partie après l'application du filtre.
+struct PartieThemeView: View {
+    let theme: Theme
+    let mode: ModeJeu
+    let filtre: FiltreSousTheme
+
+    @EnvironmentObject private var gestionnaireProfils: GestionnaireProfils
+
+    var body: some View {
+        let niveau = gestionnaireProfils.niveauPourTheme(
+            cle: theme.cleProgression,
+            progression: gestionnaireProfils.progressionTheme(theme)
+        )
+        let exclus = gestionnaireProfils.motsTrouves(cle: theme.cleProgression)
+
+        if let motSecret = theme.motAleatoireNonTrouve(
+            niveau: niveau,
+            exclus: exclus,
+            filtre: filtre
+        ) {
+            JeuView(
+                motSecret: motSecret,
+                theme: theme,
+                mode: mode,
+                niveau: niveau,
+                filtreSousTheme: filtre
+            )
+        } else if case .sousTheme(let identifiant) = filtre,
+                  let sousTheme = theme.sousTheme(identifiant) {
+            VueSousThemeTermine(theme: theme, mode: mode, sousTheme: sousTheme)
+        } else {
+            VueThemeTermine(titre: theme.nom, emoji: theme.emoji)
+        }
+    }
+}
+
+struct VueSousThemeTermine: View {
+    let theme: Theme
+    let mode: ModeJeu
+    let sousTheme: SousTheme
+
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var selectionsSousThemes: SelectionSousThemes
+    @State private var lancerTous = false
+
+    var body: some View {
+        ZStack {
+            fondJeu.ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                Text("✅")
+                    .font(.system(size: 54))
+                Text("Sous-thème terminé")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(.white)
+                Text("Tous les mots de « \(sousTheme.nom) » ont été découverts.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.white.opacity(0.65))
+
+                Button {
+                    selectionsSousThemes.choisir(.aleatoire, pour: theme)
+                    lancerTous = true
+                } label: {
+                    Text(theme.nom == "Pays" ? "Jouer tous les pays" : "Jouer toute la banque")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(Color.red))
+                }
+
+                Button("Changer de sous-thème") {
+                    dismiss()
+                }
+                .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(28)
+        }
+        .navigationBarHidden(true)
+        .navigationDestination(isPresented: $lancerTous) {
+            PartieThemeView(theme: theme, mode: mode, filtre: .aleatoire)
+        }
     }
 }
 
@@ -939,6 +1149,7 @@ struct JeuView: View {
     /// Thème du mode solo ; `nil` en mode 2 joueurs.
     let theme: Theme?
     let generationPokemon: GenerationPokemon?
+    let filtreSousTheme: FiltreSousTheme?
     let mode: ModeJeu
     let niveauInitial: NiveauJeu
 
@@ -964,12 +1175,14 @@ struct JeuView: View {
         theme: Theme? = nil,
         generationPokemon: GenerationPokemon? = nil,
         mode: ModeJeu = .duo,
-        niveau: NiveauJeu = .debutant
+        niveau: NiveauJeu = .debutant,
+        filtreSousTheme: FiltreSousTheme? = nil
     ) {
         _motSecret = State(initialValue: motSecret.uppercased())
         _niveauActuel = State(initialValue: niveau)
         self.theme = theme
         self.generationPokemon = generationPokemon
+        self.filtreSousTheme = filtreSousTheme
         self.mode = mode
         self.niveauInitial = niveau
     }
@@ -996,6 +1209,11 @@ struct JeuView: View {
                         Text(sourceTitre)
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.6))
+                        if let theme, theme.possedeSousThemes, let filtreSousTheme {
+                            Text(theme.libellePour(filtreSousTheme))
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(.red.opacity(0.85))
+                        }
                         Text("\(nbLettres) lettres · niveau \(niveauActuel.rawValue)")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.5))
@@ -1994,7 +2212,8 @@ struct JeuView: View {
         return theme?.motAleatoireNonTrouve(
             niveau: niveauActuel,
             sauf: sauf,
-            exclus: exclus
+            exclus: exclus,
+            filtre: filtreSousTheme ?? .aleatoire
         )
     }
 }
